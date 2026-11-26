@@ -9,9 +9,10 @@
 
 const TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN") ?? "";
 const SB_URL = Deno.env.get("SUPABASE_URL") ?? "";
+// chave interna do Supabase: o nome muda conforme a idade do projeto, então tentamos todos
 const SB_KEY = (() => {
-  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { /* usa a legada */ }
-  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { /* tenta os outros nomes */ }
+  return Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("LK_SECRET_KEY") || "";
 })();
 
 async function sha256(s) { return new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s))); }
@@ -31,6 +32,8 @@ async function rpc(fn, body) {
 
 Deno.serve(async req => {
   if (req.method !== "POST") return new Response("use POST", { status: 405 });
+  if (!TOKEN) return new Response("falta o segredo ASAAS_WEBHOOK_TOKEN", { status: 500 });
+  if (!SB_KEY) return new Response("falta a chave secreta do Supabase (segredo LK_SECRET_KEY)", { status: 500 });
   if (!(await tokenOk(req.headers.get("asaas-access-token")))) return new Response("token inválido", { status: 401 });
   let ev; try { ev = await req.json(); } catch (_) { return new Response("json inválido", { status: 400 }); }
   const tipo = String(ev.event ?? "");

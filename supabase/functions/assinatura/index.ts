@@ -11,9 +11,10 @@
 const ASAAS_URL = Deno.env.get("ASAAS_URL") ?? "https://api-sandbox.asaas.com/v3";
 const ASAAS_KEY = Deno.env.get("ASAAS_API_KEY") ?? "";
 const SB_URL = Deno.env.get("SUPABASE_URL") ?? "";
+// chave interna do Supabase: o nome muda conforme a idade do projeto, então tentamos todos
 const SB_KEY = (() => {
-  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { /* usa a legada */ }
-  return Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { /* tenta os outros nomes */ }
+  return Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("LK_SECRET_KEY") || "";
 })();
 const FORMAS = ["CREDIT_CARD", "PIX", "BOLETO"];
 
@@ -148,7 +149,9 @@ Deno.serve(async req => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
   if (req.method !== "POST") return resp({ erro: "Use POST." }, 405);
   try {
-    if (!ASAAS_KEY || !SB_URL || !SB_KEY) throw new Erro("Cobrança ainda não configurada no servidor.", 500);
+    const faltando = [!ASAAS_KEY && "ASAAS_API_KEY", !SB_URL && "SUPABASE_URL", !SB_KEY && "LK_SECRET_KEY (chave secreta sb_secret_...)"].filter(Boolean);
+    if (faltando.length) throw new Erro("Cobrança não configurada no servidor. Falta o segredo: " + faltando.join(", ") + ".", 500);
+    if (!ASAAS_KEY.startsWith("$aact_")) throw new Erro("ASAAS_API_KEY parece errada: ela começa com $aact_. Se salvou pelo PowerShell, use aspas simples.", 500);
     const user = await usuario(req);
     const x = await req.json().catch(() => ({}));
     const b = await carregar(user, x.bid);
