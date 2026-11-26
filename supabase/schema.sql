@@ -426,3 +426,27 @@ revoke all on function sou_super(), meus_acessos(), criar_barbearia(text, text, 
   gerar_convite(uuid), aceitar_convite(text), remover_acesso(uuid), todas_barbearias() from public, anon;
 grant execute on function sou_super(), meus_acessos(), criar_barbearia(text, text, text), profissionais_da_barbearia(uuid),
   gerar_convite(uuid), aceitar_convite(text), remover_acesso(uuid), todas_barbearias() to authenticated;
+
+-- ---------------- PERMISSÕES DE ACESSO (Data API) ----------------
+-- Projetos Supabase criados a partir de 30/05/2026 não liberam tabelas automaticamente:
+-- cada papel recebe só o que o app usa. As regras de linha (RLS) acima continuam valendo por cima disto.
+grant usage on schema public to anon, authenticated, service_role;
+
+-- visitante (cliente sem login): só lê os planos; o resto passa pelas funções públicas
+grant select on planos to anon;
+
+-- usuário logado (dono, barbeiro, você)
+grant select, update on planos to authenticated;                 -- update só passa para o super admin (RLS)
+grant select, update on barbearias to authenticated;
+grant select, insert, update on profissionais to authenticated;
+grant select on membros to authenticated;
+grant select, insert, update on agendamentos to authenticated;
+grant select, insert, delete on bloqueios to authenticated;
+grant select on pagamentos to authenticated;
+
+-- servidor (Edge Functions com a chave secreta)
+grant all on all tables in schema public to service_role;
+
+-- funções auxiliares usadas dentro das regras de segurança
+grant execute on function is_super(), papel_em(uuid), meu_prof(uuid), hoje_br(), liberada(barbearias), e_servidor()
+  to anon, authenticated, service_role;
