@@ -1,0 +1,298 @@
+-- ============================================================
+-- Agenda Barber — banco multi-barbearia (Supabase)
+-- 1) SQL Editor → cole tudo → Run.
+-- 2) Authentication → Providers → Email: deixe "Allow new users to sign up" LIGADO
+--    (as barbearias se cadastram sozinhas). "Confirm email" pode ficar ligado ou não.
+-- 3) Crie sua conta (cadastre-se no site ou Authentication → Add user) e torne-se super admin:
+--      insert into plataforma_admins (user_id)
+--      select id from auth.users where email = 'SEU-EMAIL@exemplo.com';
+-- ============================================================
+create extension if not exists pgcrypto;
+
+-- ---------------- TABELAS ----------------
+create table if not exists plataforma_admins (user_id uuid primary key references auth.users on delete cascade);
+
+create table if not exists barbearias (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$'),
+  nome text not null,
+  config jsonb not null default '{}'::jsonb,
+  status text not null default 'teste' check (status in ('teste','ativa','bloqueada')),
+  plano text not null default 'solo' check (plano in ('solo','equipe','ilimitado')),
+  vence_em date,
+  dono_email text,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists profissionais (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  nome text not null check (char_length(nome) between 1 and 40),
+  dias int[] not null default '{0,1,2,3,4,5,6}',
+  ativo boolean not null default true,
+  comissao numeric(5,2) not null default 0,
+  ordem int not null default 0,
+  email text default ''
+);
+
+create table if not exists membros (
+  user_id uuid not null references auth.users on delete cascade,
+  barbearia_id uuid not null references barbearias on delete cascade,
+  papel text not null check (papel in ('dono','barbeiro')),
+  prof_id uuid references profissionais on delete set null,
+  primary key (user_id, barbearia_id)
+);
+
+create table if not exists convites (
+  codigo text primary key,
+  barbearia_id uuid not null references barbearias on delete cascade,
+  prof_id uuid not null references profissionais on delete cascade,
+  usado boolean not null default false,
+  criado_em timestamptz not null default now()
+);
+
+create table if not exists agendamentos (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  prof_id uuid references profissionais on delete set null,
+  data date not null,
+  hora time not null,
+  dur int not null check (dur between 5 and 480),
+  servico_id text,
+  servico_nome text not null,
+  preco numeric(10,2) not null default 0,
+  nome text not null check (char_length(nome) between 2 and 80),
+  telefone text default '',
+  status text not null default 'agendado' check (status in ('agendado','concluido','faltou','cancelado')),
+  origem text not null default 'online',
+  token text not null default gen_random_uuid()::text,
+  criado_em timestamptz not null default now()
+);
+create index if not exists ag_idx on agendamentos (barbearia_id, data, hora);
+create index if not exists ag_prof_idx on agendamentos (prof_id, data);
+
+create table if not exists bloqueios (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  prof_id uuid references profissionais on delete cascade,   -- null = barbearia inteira
+  data date not null,
+  ini time, fim time,                                          -- null = dia inteiro
+  motivo text default ''
+);
+create index if not exists blq_idx on bloqueios (barbearia_id, data);
+
+-- ---------------- FUNÇÕES DE PERMISSÃO ----------------
+create or replace function is_super() returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from plataforma_admins where user_id = auth.uid()) $$;
+create or replace function papel_em(p_bid uuid) returns text language sql stable security definer set search_path = public as $$
+  select papel from membros where user_id = auth.uid() and barbearia_id = p_bid $$;
+create or replace function meu_prof(p_bid uuid) returns uuid language sql stable security definer set search_path = public as $$
+  select prof_id from membros where user_id = auth.uid() and barbearia_id = p_bid $$;
+create or replace function hoje_br() returns date language sql stable as $$ select (now() at time zone 'America/Sao_Paulo')::date $$;
+create or replace function liberada(b barbearias) returns boolean language sql stable as $$
+  select b.status <> 'bloqueada' and (b.vence_em is null or b.vence_em >= hoje_br()) $$;
+
+-- ---------------- RLS ----------------
+alter table plataforma_admins enable row level security;
+alter table barbearias enable row level security;
+alter table profissionais enable row level security;
+alter table membros enable row level security;
+alter table convites enable row level security;
+alter table agendamentos enable row level security;
+alter table bloqueios enable row level security;
+
+drop policy if exists b_sel on barbearias;  create policy b_sel on barbearias for select to authenticated using (is_super() or papel_em(id) is not null);
+drop policy if exists b_upd on barbearias;  create policy b_upd on barbearias for update to authenticated using (is_super() or papel_em(id) = 'dono') with check (is_super() or papel_em(id) = 'dono');
+
+drop policy if exists p_sel on profissionais; create policy p_sel on profissionais for select to authenticated using (is_super() or papel_em(barbearia_id) is not null);
+drop policy if exists p_ins on profissionais; create policy p_ins on profissionais for insert to authenticated with check (is_super() or papel_em(barbearia_id) = 'dono');
+drop policy if exists p_upd on profissionais; create policy p_upd on profissionais for update to authenticated using (is_super() or papel_em(barbearia_id) = 'dono');
+
+drop policy if exists m_sel on membros; create policy m_sel on membros for select to authenticated using (user_id = auth.uid() or is_super() or papel_em(barbearia_id) = 'dono');
+
+drop policy if exists a_sel on agendamentos; create policy a_sel on agendamentos for select to authenticated
+  using (is_super() or papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
+drop policy if exists a_ins on agendamentos; create policy a_ins on agendamentos for insert to authenticated
+  with check (papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
+drop policy if exists a_upd on agendamentos; create policy a_upd on agendamentos for update to authenticated
+  using (is_super() or papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)))
+  with check (is_super() or papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
+
+drop policy if exists bl_sel on bloqueios; create policy bl_sel on bloqueios for select to authenticated using (is_super() or papel_em(barbearia_id) is not null);
+drop policy if exists bl_ins on bloqueios; create policy bl_ins on bloqueios for insert to authenticated
+  with check (papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
+drop policy if exists bl_del on bloqueios; create policy bl_del on bloqueios for delete to authenticated
+  using (papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
+
+-- Dono não altera a própria assinatura (status, plano, vencimento, endereço): só o super admin.
+create or replace function proteger_assinatura() returns trigger language plpgsql as $$
+begin
+  if not is_super() and (new.status is distinct from old.status or new.plano is distinct from old.plano
+     or new.vence_em is distinct from old.vence_em or new.slug is distinct from old.slug or new.dono_email is distinct from old.dono_email) then
+    raise exception 'somente o administrador da plataforma pode alterar a assinatura';
+  end if;
+  return new;
+end $$;
+drop trigger if exists trg_proteger on barbearias;
+create trigger trg_proteger before update on barbearias for each row execute function proteger_assinatura();
+
+-- Limite de barbeiros ativos por plano.
+create or replace function limite_profissionais() returns trigger language plpgsql security definer set search_path = public as $$
+declare v_plano text; v_max int; v_n int;
+begin
+  if not new.ativo then return new; end if;
+  select plano into v_plano from barbearias where id = new.barbearia_id;
+  v_max := case v_plano when 'solo' then 1 when 'equipe' then 5 else null end;
+  if v_max is null then return new; end if;
+  select count(*) into v_n from profissionais where barbearia_id = new.barbearia_id and ativo and id <> new.id;
+  if v_n >= v_max then raise exception 'limite_plano'; end if;
+  return new;
+end $$;
+drop trigger if exists trg_limite on profissionais;
+create trigger trg_limite before insert or update on profissionais for each row execute function limite_profissionais();
+
+-- ---------------- FUNÇÕES PÚBLICAS (cliente, sem login) ----------------
+create or replace function slug_disponivel(p_slug text) returns boolean language sql stable security definer set search_path = public as $$
+  select not exists (select 1 from barbearias where slug = lower(p_slug)) $$;
+
+create or replace function dados_publicos(p_slug text) returns json language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'b', json_build_object('id', b.id, 'slug', b.slug, 'nome', b.nome, 'status', b.status, 'vence_em', b.vence_em, 'config', b.config),
+    'profs', coalesce((select json_agg(json_build_object('id', p.id, 'nome', p.nome, 'dias', p.dias) order by p.ordem, p.nome)
+                       from profissionais p where p.barbearia_id = b.id and p.ativo), '[]'::json))
+  from barbearias b where b.slug = lower(p_slug) $$;
+
+create or replace function horarios_ocupados(p_slug text, p_de date, p_ate date)
+returns table (prof uuid, data date, ini time, fim time) language sql stable security definer set search_path = public as $$
+  select a.prof_id, a.data, a.hora, a.hora + make_interval(mins => a.dur)
+    from agendamentos a join barbearias b on b.id = a.barbearia_id
+   where b.slug = lower(p_slug) and a.data between p_de and p_ate and a.status in ('agendado','concluido')
+  union all
+  select k.prof_id, k.data, k.ini, k.fim
+    from bloqueios k join barbearias b on b.id = k.barbearia_id
+   where b.slug = lower(p_slug) and k.data between p_de and p_ate $$;
+
+create or replace function agendar(p_slug text, p_servico text, p_prof uuid, p_nome text, p_tel text, p_data date, p_hora time)
+returns json language plpgsql security definer set search_path = public as $$
+declare
+  b barbearias; s jsonb; h jsonb; v_dur int; v_fim time; v_prof profissionais; r agendamentos;
+begin
+  select * into b from barbearias where slug = lower(p_slug);
+  if b.id is null or not liberada(b) then raise exception 'indisponivel'; end if;
+  select e into s from jsonb_array_elements(b.config->'servicos') e where e->>'id' = p_servico limit 1;
+  if s is null then raise exception 'servico invalido'; end if;
+  if p_data < hoje_br() then raise exception 'data no passado'; end if;
+  h := b.config->'horarios'->(extract(dow from p_data)::int::text);
+  v_dur := (s->>'dur')::int; v_fim := p_hora + make_interval(mins => v_dur);
+  if h is null or not coalesce((h->>'aberto')::boolean, false)
+     or p_hora < (h->>'abre')::time or v_fim > (h->>'fecha')::time then raise exception 'ocupado'; end if;
+
+  perform pg_advisory_xact_lock(hashtext(b.id::text || p_data::text));
+
+  -- escolhe o profissional pedido, ou o livre com menos atendimentos no dia
+  select p.* into v_prof from profissionais p
+   where p.barbearia_id = b.id and p.ativo and (p_prof is null or p.id = p_prof)
+     and extract(dow from p_data)::int = any(p.dias)
+     and not exists (select 1 from agendamentos a where a.prof_id = p.id and a.data = p_data and a.status in ('agendado','concluido')
+                       and a.hora < v_fim and p_hora < a.hora + make_interval(mins => a.dur))
+     and not exists (select 1 from bloqueios k where k.barbearia_id = b.id and k.data = p_data and (k.prof_id is null or k.prof_id = p.id)
+                       and (k.ini is null or (k.ini < v_fim and p_hora < k.fim)))
+   order by (select count(*) from agendamentos a where a.prof_id = p.id and a.data = p_data and a.status in ('agendado','concluido')), p.ordem
+   limit 1;
+  if v_prof.id is null then raise exception 'ocupado'; end if;
+
+  insert into agendamentos (barbearia_id, prof_id, data, hora, dur, servico_id, servico_nome, preco, nome, telefone)
+  values (b.id, v_prof.id, p_data, p_hora, v_dur, p_servico, s->>'nome', coalesce((s->>'preco')::numeric, 0), left(trim(p_nome), 80), left(coalesce(p_tel, ''), 20))
+  returning * into r;
+  return json_build_object('id', r.id, 'token', r.token, 'prof_nome', v_prof.nome);
+end $$;
+
+create or replace function cancelar_agendamento(p_id uuid, p_token text) returns void language plpgsql security definer set search_path = public as $$
+begin
+  update agendamentos set status = 'cancelado' where id = p_id and token = p_token and status = 'agendado';
+  if not found then raise exception 'nao foi possivel cancelar'; end if;
+end $$;
+
+create or replace function status_agendamentos(p_ids uuid[]) returns table (id uuid, status text)
+language sql stable security definer set search_path = public as $$ select a.id, a.status from agendamentos a where a.id = any(p_ids) $$;
+
+-- ---------------- FUNÇÕES DE CONTA (logado) ----------------
+create or replace function sou_super() returns boolean language sql stable security definer set search_path = public as $$ select is_super() $$;
+
+create or replace function meus_acessos() returns json language sql stable security definer set search_path = public as $$
+  select coalesce(json_agg(json_build_object('barbearia_id', b.id, 'slug', b.slug, 'nome', b.nome, 'papel', m.papel, 'prof_id', m.prof_id) order by b.nome), '[]'::json)
+    from membros m join barbearias b on b.id = m.barbearia_id where m.user_id = auth.uid() $$;
+
+create or replace function criar_barbearia(p_nome text, p_slug text, p_nome_dono text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_b uuid; v_p uuid; v_email text;
+begin
+  if auth.uid() is null then raise exception 'entre na sua conta'; end if;
+  if exists (select 1 from barbearias where slug = lower(p_slug)) then raise exception 'slug em uso'; end if;
+  select email into v_email from auth.users where id = auth.uid();
+  insert into barbearias (slug, nome, status, plano, vence_em, dono_email)
+  values (lower(p_slug), left(trim(p_nome), 60), 'teste', 'solo', hoje_br() + 14, v_email) returning id into v_b;
+  insert into profissionais (barbearia_id, nome, email) values (v_b, left(trim(p_nome_dono), 40), v_email) returning id into v_p;
+  insert into membros (user_id, barbearia_id, papel, prof_id) values (auth.uid(), v_b, 'dono', v_p);
+  return v_b;
+end $$;
+
+create or replace function profissionais_da_barbearia(p_bid uuid) returns json language sql stable security definer set search_path = public as $$
+  select coalesce(json_agg(json_build_object('id', p.id, 'nome', p.nome, 'dias', p.dias, 'ativo', p.ativo, 'comissao', p.comissao,
+           'ordem', p.ordem, 'email', p.email, 'tem_acesso', exists (select 1 from membros m where m.prof_id = p.id)) order by p.ordem, p.nome), '[]'::json)
+    from profissionais p where p.barbearia_id = p_bid and (is_super() or papel_em(p_bid) is not null) $$;
+
+create or replace function gerar_convite(p_prof uuid) returns text language plpgsql security definer set search_path = public as $$
+declare v_bid uuid; v_cod text;
+begin
+  select barbearia_id into v_bid from profissionais where id = p_prof;
+  if papel_em(v_bid) is distinct from 'dono' then raise exception 'sem permissao'; end if;
+  update convites set usado = true where prof_id = p_prof;
+  v_cod := upper(substr(translate(encode(gen_random_bytes(8), 'base64'), '+/=0O1IL', ''), 1, 6));
+  insert into convites (codigo, barbearia_id, prof_id) values (v_cod, v_bid, p_prof);
+  return v_cod;
+end $$;
+
+create or replace function aceitar_convite(p_codigo text) returns void language plpgsql security definer set search_path = public as $$
+declare c convites; v_email text;
+begin
+  if auth.uid() is null then raise exception 'entre na sua conta'; end if;
+  select * into c from convites where codigo = upper(trim(p_codigo)) and not usado and criado_em > now() - interval '7 days';
+  if c.codigo is null then raise exception 'convite invalido'; end if;
+  if exists (select 1 from membros where prof_id = c.prof_id) then raise exception 'convite invalido'; end if;
+  select email into v_email from auth.users where id = auth.uid();
+  insert into membros (user_id, barbearia_id, papel, prof_id) values (auth.uid(), c.barbearia_id, 'barbeiro', c.prof_id)
+    on conflict (user_id, barbearia_id) do update set prof_id = excluded.prof_id;
+  update profissionais set email = v_email where id = c.prof_id;
+  update convites set usado = true where codigo = c.codigo;
+end $$;
+
+create or replace function remover_acesso(p_prof uuid) returns void language plpgsql security definer set search_path = public as $$
+declare v_bid uuid;
+begin
+  select barbearia_id into v_bid from profissionais where id = p_prof;
+  if papel_em(v_bid) is distinct from 'dono' then raise exception 'sem permissao'; end if;
+  delete from membros where prof_id = p_prof and papel = 'barbeiro';
+  update profissionais set email = '' where id = p_prof;
+end $$;
+
+-- ---------------- SUPER ADMIN ----------------
+create or replace function todas_barbearias() returns json language plpgsql stable security definer set search_path = public as $$
+begin
+  if not is_super() then raise exception 'sem permissao'; end if;
+  return (select coalesce(json_agg(json_build_object('id', b.id, 'slug', b.slug, 'nome', b.nome, 'status', b.status, 'plano', b.plano,
+      'vence_em', b.vence_em, 'dono_email', b.dono_email, 'criado_em', b.criado_em,
+      'n_profs', (select count(*) from profissionais p where p.barbearia_id = b.id and p.ativo),
+      'n_ags_30', (select count(*) from agendamentos a where a.barbearia_id = b.id and a.data >= hoje_br() - 30 and a.status <> 'cancelado'))
+    order by b.criado_em desc), '[]'::json) from barbearias b);
+end $$;
+
+-- ---------------- GRANTS ----------------
+revoke all on function slug_disponivel(text), dados_publicos(text), horarios_ocupados(text, date, date),
+  agendar(text, text, uuid, text, text, date, time), cancelar_agendamento(uuid, text), status_agendamentos(uuid[]) from public;
+grant execute on function slug_disponivel(text), dados_publicos(text), horarios_ocupados(text, date, date),
+  agendar(text, text, uuid, text, text, date, time), cancelar_agendamento(uuid, text), status_agendamentos(uuid[]) to anon, authenticated;
+revoke all on function sou_super(), meus_acessos(), criar_barbearia(text, text, text), profissionais_da_barbearia(uuid),
+  gerar_convite(uuid), aceitar_convite(text), remover_acesso(uuid), todas_barbearias() from public, anon;
+grant execute on function sou_super(), meus_acessos(), criar_barbearia(text, text, text), profissionais_da_barbearia(uuid),
+  gerar_convite(uuid), aceitar_convite(text), remover_acesso(uuid), todas_barbearias() to authenticated;

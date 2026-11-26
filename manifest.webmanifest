@@ -1,0 +1,21 @@
+{
+  "name": "Agenda Barber",
+  "short_name": "Agenda Barber",
+  "description": "Agenda online para barbearias.",
+  "id": "./",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#16181d",
+  "theme_color": "#16181d",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Painel do barbeiro", "url": "painel", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
