@@ -3,7 +3,7 @@
 // NUNCA coloque aqui a chave secreta (sb_secret_...) nem a service_role.
 window.BARBER_BACKEND = {
   SUPABASE_URL: "https://psolqyvhsxdpuodxlpwh.supabase.co",              // ex: "https://abcdefgh.supabase.co"
-  SUPABASE_PUBLISHABLE_KEY: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBzb2xxeXZoc3hkcHVvZHhscHdoIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc5NTcyMDI2OSwiZXhwIjoyMTExMjk2MjY5fQ.2Sk3PfuRezF8YVOJKVKCDBg3urmkACiu8ZLiuJBcpd0"   // ex: "sb_publishable_..."
+  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ul0lVVWTqWjfzCc9sQetXA_M0bCsz3O"   // ex: "sb_publishable_..."
 };
 
 // ===== SUA PLATAFORMA =====
