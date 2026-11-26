@@ -51,10 +51,13 @@
   function statusEfetivo(b, hoje) {
     if (!b) return "inexistente";
     if (b.status === "bloqueada") return "bloqueada";
-    if (b.vence_em && b.vence_em < hoje) return b.status === "teste" ? "teste_vencido" : "vencida";
+    if (b.vence_em && b.vence_em < hoje) {
+      if (b.status === "teste") return "teste_vencido";
+      return addDays(b.vence_em, 3) >= hoje ? "carencia" : "vencida"; // 3 dias de carência (igual ao banco)
+    }
     return b.status;
   }
-  const liberada = (b, hoje) => ["ativa", "teste"].includes(statusEfetivo(b, hoje));
+  const liberada = (b, hoje) => ["ativa", "teste", "carencia"].includes(statusEfetivo(b, hoje));
 
   root.Agenda = { pad, toMin, toHM, ymd, parseYMD, addDays, overlap, dow, trabalha, slotsDoDia, slotsEquipe, statusEfetivo, liberada };
   if (typeof module !== "undefined") module.exports = root.Agenda;

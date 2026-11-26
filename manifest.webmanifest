@@ -1,6 +1,6 @@
 {
-  "name": "Agenda Barber",
-  "short_name": "Agenda Barber",
+  "name": "LKBarber",
+  "short_name": "LKBarber",
   "description": "Agenda online para barbearias.",
   "id": "./",
   "start_url": "./",

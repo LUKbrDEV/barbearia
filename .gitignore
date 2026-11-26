@@ -1,0 +1,6 @@
+Claude outputs/
+node_modules/
+supabase/.temp/
+supabase/.branches/
+.env
+*.local

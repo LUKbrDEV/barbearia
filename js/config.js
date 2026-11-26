@@ -1,24 +1,19 @@
-// ===== BACKEND =====
-// Vazio = modo demonstração (tudo salvo neste navegador, com contas de teste).
-// Produção: crie um projeto Supabase, rode supabase/schema.sql e preencha abaixo.
+// ===== CONEXÃO COM O SUPABASE (obrigatório) =====
+// Supabase → Project Settings → API Keys. Use a chave PUBLICÁVEL (sb_publishable_...) ou a "anon" antiga.
+// NUNCA coloque aqui a chave secreta (sb_secret_...) nem a service_role.
 window.BARBER_BACKEND = {
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: ""
+  SUPABASE_URL: "",              // ex: "https://abcdefgh.supabase.co"
+  SUPABASE_PUBLISHABLE_KEY: ""   // ex: "sb_publishable_..."
 };
 
 // ===== SUA PLATAFORMA =====
+// Preços e limites dos planos ficam no banco (tabela "planos"), editáveis em /admin.
 window.PLATAFORMA = {
-  nome: "Agenda Barber",                 // nome do seu produto
-  dominio: "seuapp.com.br",              // usado só nos textos
-  suporteWhatsapp: "5538999990000",      // seu WhatsApp de suporte/vendas
-  diasTeste: 14,
-  planos: [
-    { id: "solo",      nome: "Solo",      preco: 39.9, maxProf: 1,    desc: "Para quem atende sozinho." },
-    { id: "equipe",    nome: "Equipe",    preco: 69.9, maxProf: 5,    desc: "Até 5 barbeiros, cada um com sua agenda." },
-    { id: "ilimitado", nome: "Ilimitado", preco: 99.9, maxProf: null, desc: "Barbeiros sem limite e relatórios por profissional." }
-  ],
-  // caminhos que não podem virar nome de barbearia
-  reservados: ["painel", "admin", "entrar", "cadastro", "api", "css", "js", "icons", "supabase", "index.html", "sw.js", "manifest.webmanifest", "termos", "privacidade"]
+  nome: "LKBarber",
+  suporteWhatsapp: "38998504119",           // seu WhatsApp de suporte, com DDD (ex.: "38999990000")
+  diasTeste: 14,                 // só texto; o prazo real está em criar_barbearia() no schema.sql
+  reservados: ["painel", "admin", "entrar", "cadastro", "api", "css", "js", "icons", "supabase", "index.html", "404.html", "sw.js",
+    "manifest.webmanifest", "termos", "privacidade", "lkbarber", "suporte", "ajuda", "app"]
 };
 
 // Configuração inicial de toda barbearia nova (editável no painel).
@@ -28,6 +23,7 @@ window.DEFAULT_CONFIG = {
   endereco: "",
   instagram: "",
   mapsUrl: "",
+  logo: null,          // { v: versão } quando a barbearia envia o próprio ícone
   pedirTelefone: false,
   intervalo: 30,
   antecedenciaMin: 60,

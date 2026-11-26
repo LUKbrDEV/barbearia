@@ -12,14 +12,13 @@
 
   function inicio() {
     topoSite();
-    const demo = S.modo === "local";
     app().innerHTML = `
     <section class="l-hero">
       <div class="l-hero-txt">
         <h1>A agenda da sua barbearia, no celular do cliente.</h1>
         <p class="l-sub">Seu link próprio, horários livres em tempo real e o cliente marca em 4 toques, só com o nome. Cada barbeiro com a sua agenda.</p>
         <div class="l-ctas"><a class="btn btn-grande" href="/cadastro" data-link>Testar grátis por ${P.diasTeste} dias</a>
-        <a class="btn btn-grande btn-vidro" href="/navalha" data-link>Ver exemplo</a></div>
+        <a class="btn btn-grande btn-vidro" href="#planos">Ver planos</a></div>
         <p class="l-mini">Sem cartão. Sem app para baixar: o cliente instala direto do navegador.</p>
       </div>
       <div class="celular" aria-hidden="true">
@@ -36,12 +35,10 @@
         </div>
       </div>
     </section>
-    ${demo ? `<div class="band"><div class="aviso"><b>Modo demonstração.</b> Contas de teste (senha <b>1234</b>): <b>dono@demo.com</b> (dono), <b>barbeiro@demo.com</b> (barbeiro), <b>admin@demo.com</b> (você, super admin). Barbearia de exemplo em <a href="/navalha" data-link>/navalha</a>.
-      <button class="lnk" id="resetDemo">Recomeçar demonstração</button></div></div>` : ""}
     <section class="band">
       <h2>Como funciona</h2>
       <ol class="passos">
-        <li><b>Crie sua barbearia</b><span>Escolha o endereço: ${esc(P.dominio)}/<i>sua-barbearia</i>.</span></li>
+        <li><b>Crie sua barbearia</b><span>Escolha o endereço: ${esc(dominio())}<i>sua-barbearia</i>.</span></li>
         <li><b>Configure em minutos</b><span>Serviços, preços, horários e a equipe. Cada barbeiro recebe um convite.</span></li>
         <li><b>Divulgue o link</b><span>Na bio do Instagram, no WhatsApp ou no QR Code do balcão.</span></li>
       </ol>
@@ -56,11 +53,8 @@
     </section>
     <section class="band" id="planos">
       <h2>Planos</h2>
-      <div class="planos">${P.planos.map((p, i) => `<div class="plano ${i === 1 ? "destaque" : ""}">${i === 1 ? `<span class="tag agendado">Mais escolhido</span>` : ""}
-        <h3>${esc(p.nome)}</h3><p class="preco-plano">${money(p.preco)}<small>/mês</small></p><p>${esc(p.desc)}</p>
-        <p class="lim">${p.maxProf ? `Até ${p.maxProf} barbeiro${p.maxProf > 1 ? "s" : ""}` : "Barbeiros ilimitados"}</p>
-        <a class="btn ${i === 1 ? "" : "btn-sec"}" href="/cadastro" data-link>Começar teste grátis</a></div>`).join("")}</div>
-      <p class="l-mini" style="color:var(--mut)">Todos os planos com agenda online, painel, relatórios e app instalável. Valores de exemplo.</p>
+      <div class="planos" id="lPlanos"><p class="vazio">Carregando planos…</p></div>
+      <p class="l-mini" style="color:var(--mut)">Todos os planos com agenda online, painel, relatórios e app instalável. Pague com cartão (cobrança automática), Pix ou boleto. Cancele quando quiser.</p>
     </section>
     <section class="band">
       <h2>Perguntas</h2>
@@ -70,7 +64,18 @@
       <details class="faq"><summary>O que acontece depois do teste?</summary><p>Você escolhe um plano para continuar. Sem plano, a agenda online pausa, mas seus dados ficam guardados.</p></details>
       <p style="margin-top:22px"><a class="btn btn-grande" href="/cadastro" data-link>Criar minha barbearia</a></p>
     </section>`;
-    const r = $("#resetDemo"); if (r) r.onclick = () => { S.resetDemo(); U.toast("Demonstração reiniciada."); U.rota(); };
+    U.planos().then(l => { const el = $("#lPlanos"); if (el) el.innerHTML = cartoesPlanos(l, "/cadastro", "Começar teste grátis"); })
+      .catch(() => { const el = $("#lPlanos"); if (el) el.innerHTML = `<p class="vazio">Não foi possível carregar os planos agora.</p>`; });
+  }
+  const dominio = () => location.host + (window.BASE || "/");
+  // cartões de plano (usados aqui e na assinatura do painel)
+  function cartoesPlanos(l, href, txt, atual) {
+    const meio = Math.floor((l.length - 1) / 2);
+    return l.map((p, i) => { const dest = atual ? p.id === atual : i === meio && l.length > 2;
+      return `<div class="plano ${dest ? "destaque" : ""}">${dest ? `<span class="tag agendado">${atual ? "Seu plano" : "Mais escolhido"}</span>` : ""}
+        <h3>${esc(p.nome)}</h3><p class="preco-plano">${money(p.preco)}<small>/mês</small></p><p>${esc(p.descricao || "")}</p>
+        <p class="lim">${p.max_prof ? `Até ${p.max_prof} barbeiro${p.max_prof > 1 ? "s" : ""}` : "Barbeiros ilimitados"}</p>
+        ${href ? `<a class="btn ${dest ? "" : "btn-sec"}" href="${href}" data-link>${txt}</a>` : ""}</div>`; }).join("");
   }
 
   function cadastro() {
@@ -81,7 +86,7 @@
       <h1>Crie sua barbearia</h1><p class="l-sub2">${P.diasTeste} dias grátis. Leva 1 minuto.</p>
       <label class="lbl">Nome da barbearia<input name="nome" required maxlength="60" placeholder="Ex.: Barbearia do Zé"></label>
       <label class="lbl">Endereço da sua página
-        <div class="slug-box"><span>${esc(P.dominio)}/</span><input name="slug" required maxlength="40" autocapitalize="none" autocomplete="off" spellcheck="false"></div>
+        <div class="slug-box"><span>${esc(dominio())}</span><input name="slug" required maxlength="40" autocapitalize="none" autocomplete="off" spellcheck="false"></div>
         <small id="slugMsg" class="dica"></small></label>
       <label class="lbl">Seu nome<input name="dono" required maxlength="40" autocomplete="name" placeholder="Como aparece para os clientes"></label>
       <label class="lbl">E-mail<input name="email" type="email" required autocomplete="email"></label>
@@ -145,5 +150,5 @@
     };
   }
 
-  window.Landing = { inicio, cadastro };
+  window.Landing = { inicio, cadastro, cartoesPlanos };
 }

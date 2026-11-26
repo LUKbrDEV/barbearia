@@ -4,7 +4,7 @@
   const { esc, money, $, ls, fmtData, durTxt, wa, DIAS, cap } = U;
   const app = () => $("#app");
   const ROT = { agendado: "Agendado", concluido: "Concluído", cancelado: "Cancelado", faltou: "Faltou" };
-  const STATUS = { teste: "Teste grátis", ativa: "Ativa", bloqueada: "Bloqueada", teste_vencido: "Teste encerrado", vencida: "Vencida" };
+  const STATUS = { teste: "Teste grátis", ativa: "Ativa", carencia: "Pagamento pendente", bloqueada: "Bloqueada", teste_vencido: "Teste encerrado", vencida: "Vencida" };
   let ctx = null, aba = "agenda", dia = U.hoje(), filtroProf = "", periodo = "30", timer = null, conhecidos = null;
   const dono = () => ctx.papel === "dono" || ctx.papel === "super";
   const cfg = () => ctx.b.config;
@@ -15,6 +15,10 @@
   async function render() {
     parar(); U.manifestPadrao(); document.title = "Painel · " + P.nome;
     U.rodapeHTML(`<span>${esc(P.nome)}</span>`);
+    if (location.hash.length > 20) { // voltou de um link de e-mail (confirmação ou nova senha)
+      try { const tipo = await S.capturarRetornoAuth(); if (tipo === "recovery") return novaSenha(); if (tipo) U.toast("E-mail confirmado!"); }
+      catch (e) { U.toast(e.message); }
+    }
     if (!S.logado()) return login();
     U.moldura({ marca: "Painel", marcaHref: "/painel" });
     app().innerHTML = `<p class="vazio band">Carregando…</p>`;
@@ -39,13 +43,12 @@
   function login() {
     U.moldura({ marca: P.nome, marcaHref: "/" });
     const conv = new URLSearchParams(location.search).get("convite") || "";
-    const demo = S.modo === "local";
     app().innerHTML = `<form class="form-pag" id="fLogin"><h1>Entrar</h1>
       <p class="l-sub2">Para donos de barbearia e barbeiros.${conv ? " Depois de entrar, o convite <b>" + esc(conv) + "</b> será usado." : ""}</p>
-      ${demo ? `<p class="aviso">Demonstração: <b>dono@demo.com</b>, <b>barbeiro@demo.com</b> ou <b>admin@demo.com</b>, senha <b>1234</b>.</p>` : ""}
       <label class="lbl">E-mail<input name="email" type="email" autocomplete="username" required></label>
       <label class="lbl">Senha<input name="senha" type="password" autocomplete="current-password" required></label>
       <p class="erro" id="lErro" role="alert"></p><button class="btn btn-grande" style="width:100%">Entrar</button>
+      <p class="centro"><button type="button" class="lnk" id="esqueci">Esqueci minha senha</button></p>
       <p class="centro"><a href="/cadastro" data-link>Criar minha barbearia</a> · <a href="/cadastro?barbeiro=1${conv ? "&convite=" + encodeURIComponent(conv) : ""}" data-link>Recebi um convite</a></p></form>`;
     $("#fLogin").onsubmit = async e => {
       e.preventDefault(); const f = e.target;
@@ -54,6 +57,21 @@
         render(); }
       catch (err) { $("#lErro").textContent = err.message; }
     };
+    $("#esqueci").onclick = () => {
+      const m = U.modal(`<h2>Recuperar senha</h2><p>Enviamos um link para você criar uma senha nova.</p><form id="fRec"><label class="lbl">E-mail<input name="email" type="email" autocomplete="email" required value="${esc($("#fLogin").email.value)}"></label>
+        <p class="erro" id="rErro"></p><div class="pilha"><button class="btn">Enviar link</button><button type="button" class="btn btn-sec" data-fechar>Cancelar</button></div></form>`);
+      m.querySelector("#fRec").onsubmit = async e => { e.preventDefault();
+        try { await S.recuperarSenha(e.target.email.value.trim()); U.modal(`<h2>Confira seu e-mail</h2><p>Se existir uma conta com esse e-mail, o link chega em instantes. Veja também o spam.</p><button class="btn" data-fechar style="width:100%">Ok</button>`); }
+        catch (er) { m.querySelector("#rErro").textContent = er.message; } };
+    };
+  }
+  function novaSenha() {
+    U.moldura({ marca: P.nome, marcaHref: "/" });
+    app().innerHTML = `<form class="form-pag" id="fNova"><h1>Nova senha</h1><p class="l-sub2">${esc((S.usuario() || {}).email || "")}</p>
+      <label class="lbl">Nova senha<input name="s" type="password" minlength="6" autocomplete="new-password" required></label>
+      <p class="erro" id="nErro"></p><button class="btn btn-grande" style="width:100%">Salvar e entrar</button></form>`;
+    $("#fNova").onsubmit = async e => { e.preventDefault();
+      try { await S.trocarSenha(e.target.s.value); U.toast("Senha alterada!"); render(); } catch (er) { $("#nErro").textContent = er.message; } };
   }
 
   function semAcesso(sup) {
@@ -77,7 +95,8 @@
       ? [{ id: "agenda", txt: "Agenda" }, { id: "bloq", txt: "Bloqueios" }, { id: "rel", txt: "Relatórios" }, { id: "cli", txt: "Clientes" }, { id: "mais", txt: "Mais" }]
       : [{ id: "agenda", txt: "Agenda" }, { id: "bloq", txt: "Folgas" }, { id: "rel", txt: "Ganhos" }, { id: "cli", txt: "Clientes" }, { id: "mais", txt: "Mais" }];
     const extras = ["equipe", "serv", "hor", "assin", "aj"];
-    U.moldura({ marca: ctx.b.nome, marcaHref: "/painel", tabs, ativo: extras.includes(aba) ? "mais" : aba,
+    const ic = U.iconesDe(ctx.bid, cfg().logo);
+    U.moldura({ marca: ctx.b.nome, marcaHref: "/painel", tabs, ativo: extras.includes(aba) ? "mais" : aba, logo: ic && ic.i192,
       acoes: `<a class="btn btn-mini btn-claro" href="/${esc(ctx.b.slug)}" data-link>Ver página</a>` });
     $("#tabbar").onclick = e => { const t = e.target.closest("[data-tab]"); if (!t) return; e.preventDefault();
       if (t.dataset.tab === "mais") return menuMais(); aba = t.dataset.tab; desenhar(); };
@@ -85,9 +104,10 @@
     let aviso = "";
     if (!lib) aviso = dono() ? `<div class="aviso ruim"><b>${esc(STATUS[se] || se)}.</b> Seus clientes não conseguem agendar online. <button class="lnk" data-ir="assin">Ver assinatura</button></div>`
                              : `<div class="aviso ruim">A agenda online da barbearia está pausada. Fale com o dono.</div>`;
-    else if (dono() && ctx.b.status === "teste" && ctx.b.vence_em) {
+    else if (dono() && se === "carencia") aviso = `<div class="aviso ruim"><b>Pagamento pendente.</b> A agenda continua aberta por poucos dias. <button class="lnk" data-ir="assin">Pagar fatura</button></div>`;
+    else if (dono() && ctx.b.status === "teste" && ctx.b.vence_em && !ctx.b.asaas_subscription_id) {
       const dias = Math.round((A.parseYMD(ctx.b.vence_em) - A.parseYMD(U.hoje())) / 864e5);
-      if (dias <= 7) aviso = `<div class="aviso">Teste grátis: ${dias === 0 ? "termina hoje" : dias === 1 ? "falta 1 dia" : `faltam ${dias} dias`}. <button class="lnk" data-ir="assin">Escolher plano</button></div>`;
+      if (dias <= 7) aviso = `<div class="aviso">Teste grátis: ${dias === 0 ? "termina hoje" : dias === 1 ? "falta 1 dia" : `faltam ${dias} dias`}. <button class="lnk" data-ir="assin">Assinar agora</button></div>`;
     }
     const titulos = { agenda: "Agenda", bloq: dono() ? "Bloqueios e folgas" : "Minhas folgas", rel: dono() ? "Relatórios" : "Meus ganhos", cli: "Clientes",
       equipe: "Equipe", serv: "Serviços", hor: "Horários", assin: "Assinatura", aj: "Ajustes" };
@@ -102,7 +122,7 @@
 
   function menuMais() {
     const it = dono()
-      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços e preços"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Dados, link e QR Code"]]
+      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços e preços"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Ícone, dados, link e QR Code"]]
       : [];
     const b = U.modal(`<h2>${esc(ctx.b.nome)}</h2><p style="color:var(--mut);margin-top:-8px">${esc((S.usuario() || {}).email)} · ${dono() ? "Dono" : "Barbeiro"}</p>
       <div class="menu">${it.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}
@@ -292,8 +312,8 @@
 
   // ---------- EQUIPE (dono) ----------
   async function equipe() {
-    const plano = P.planos.find(p => p.id === ctx.b.plano), ativos = ctx.profs.filter(p => p.ativo).length;
-    box().innerHTML = `<p class="sub" style="margin-top:0">Plano ${esc(plano ? plano.nome : ctx.b.plano)}: ${ativos} de ${plano && plano.maxProf ? plano.maxProf : "∞"} barbeiro(s) ativo(s).</p>
+    const plano = (await U.planos().catch(() => [])).find(p => p.id === ctx.b.plano), ativos = ctx.profs.filter(p => p.ativo).length;
+    box().innerHTML = `<p class="sub" style="margin-top:0">Plano ${esc(plano ? plano.nome : ctx.b.plano)}: ${ativos} de ${plano && plano.max_prof ? plano.max_prof : "∞"} barbeiro(s) ativo(s).</p>
       <div id="eLista">${ctx.profs.map(p => `<div class="prof-card ${p.ativo ? "" : "inativo"}" data-id="${esc(p.id)}">
         <div class="prof-top"><span class="avatar">${esc(U.iniciais(p.nome))}</span><div><b>${esc(p.nome)}</b>
           <small>${p.id === ctx.prof_id ? "Você · dono" : p.tem_acesso ? "Acesso: " + esc(p.email || "ativo") : "Sem acesso ao painel"}${p.comissao ? " · comissão " + Number(p.comissao) + "%" : ""}</small></div></div>
@@ -374,43 +394,198 @@
 
   // ---------- HORÁRIOS (dono) ----------
   function hor() {
-    const c = cfg(), H = JSON.parse(JSON.stringify(c.horarios));
-    box().innerHTML = `<div id="hDias">${[1, 2, 3, 4, 5, 6, 0].map(d => { const h = H[d]; return `<div class="linha-dia" data-d="${d}">
-      <label class="switch"><input type="checkbox" data-k="aberto" ${h.aberto ? "checked" : ""}>${DIAS[d].slice(0, 3)}</label>
-      <input type="time" data-k="abre" value="${esc(h.abre)}" aria-label="Abre"><input type="time" data-k="fecha" value="${esc(h.fecha)}" aria-label="Fecha">
-      <div class="alm"><small>Pausa (vazio se não tiver)</small><input type="time" data-k="almocoIni" value="${esc(h.almocoIni)}" aria-label="Início da pausa"><input type="time" data-k="almocoFim" value="${esc(h.almocoFim)}" aria-label="Fim da pausa"></div></div>`; }).join("")}</div>
-      <p class="sub">Os dias de cada barbeiro são definidos em Equipe.</p>
-      <h2 style="margin-top:24px">Regras do agendamento</h2><div class="form-grid">
-      <label>Intervalo entre horários<select id="hInt">${[10, 15, 20, 30, 40, 45, 60].map(v => `<option ${c.intervalo == v ? "selected" : ""} value="${v}">${v} min</option>`).join("")}</select></label>
-      <label>Antecedência mínima<select id="hAnt">${[0, 15, 30, 60, 120, 180, 1440].map(v => `<option ${c.antecedenciaMin == v ? "selected" : ""} value="${v}">${v >= 1440 ? "1 dia" : v >= 60 ? v / 60 + " h" : v + " min"}</option>`).join("")}</select></label>
-      <label>Agenda aberta por<select id="hDias2">${[7, 14, 21, 30, 45, 60].map(v => `<option ${c.diasAgenda == v ? "selected" : ""} value="${v}">${v} dias</option>`).join("")}</select></label></div>
-      <button class="btn" id="hSalvar" style="margin-top:18px;width:100%">Salvar horários</button>`;
-    $("#hDias").oninput = e => { const k = e.target.dataset.k; if (!k) return; H[e.target.closest("[data-d]").dataset.d][k] = e.target.type === "checkbox" ? e.target.checked : e.target.value; };
+    const c = cfg(), H = JSON.parse(JSON.stringify(c.horarios)), ORDEM = [1, 2, 3, 4, 5, 6, 0];
+    const cartao = d => { const h = H[d], pausa = !!(h.almocoIni || h.almocoFim || h._pausa);
+      return `<div class="dia-card ${h.aberto ? "" : "fechado"}" data-d="${d}">
+        <div class="dia-cab"><b class="dia-nome">${DIAS[d]}</b>
+          <span class="dia-resumo">${h.aberto ? `${esc(h.abre)} – ${esc(h.fecha)}${pausa && h.almocoIni ? ` · pausa ${esc(h.almocoIni)}` : ""}` : "Fechado"}</span>
+          <label class="toggle"><input type="checkbox" data-k="aberto" ${h.aberto ? "checked" : ""} aria-label="${DIAS[d]} aberto"><span class="trilho" aria-hidden="true"></span></label></div>
+        ${h.aberto ? `<div class="dia-corpo">
+          <div class="faixa"><label><span>Abre</span><input type="time" data-k="abre" value="${esc(h.abre)}" step="900"></label><span class="ate" aria-hidden="true">→</span>
+            <label><span>Fecha</span><input type="time" data-k="fecha" value="${esc(h.fecha)}" step="900"></label></div>
+          ${pausa ? `<div class="faixa pausa"><label><span>Pausa de</span><input type="time" data-k="almocoIni" value="${esc(h.almocoIni)}" step="900"></label><span class="ate" aria-hidden="true">→</span>
+            <label><span>Volta às</span><input type="time" data-k="almocoFim" value="${esc(h.almocoFim)}" step="900"></label>
+            <button type="button" class="lnk sutil remover-pausa" data-a="sem-pausa">Remover pausa</button></div>`
+          : `<button type="button" class="lnk" data-a="com-pausa">+ Adicionar pausa (almoço)</button>`}
+          <button type="button" class="lnk sutil" data-a="copiar">Usar este horário em todos os dias abertos</button></div>` : ""}</div>`; };
+    const desenharH = () => { $("#hDias").innerHTML = ORDEM.map(cartao).join(""); };
+    box().innerHTML = `<p class="sub" style="margin-top:0">Toque no botão para abrir ou fechar o dia. Os dias de cada barbeiro ficam em Equipe.</p>
+      <div id="hDias" class="dias-lista"></div>
+      <h2 style="margin-top:28px">Regras do agendamento</h2><div class="form-grid">
+      <label>Intervalo entre horários<select id="hInt">${[10, 15, 20, 30, 40, 45, 60].map(v => `<option ${c.intervalo == v ? "selected" : ""} value="${v}">A cada ${v} min</option>`).join("")}</select></label>
+      <label>Antecedência mínima<select id="hAnt">${[0, 15, 30, 60, 120, 180, 1440].map(v => `<option ${c.antecedenciaMin == v ? "selected" : ""} value="${v}">${v === 0 ? "Sem mínimo" : v >= 1440 ? "1 dia antes" : v >= 60 ? v / 60 + " h antes" : v + " min antes"}</option>`).join("")}</select></label>
+      <label class="full">Cliente pode agendar com até<select id="hDias2">${[7, 14, 21, 30, 45, 60].map(v => `<option ${c.diasAgenda == v ? "selected" : ""} value="${v}">${v} dias de antecedência</option>`).join("")}</select></label></div>
+      <div class="barra-salvar"><button class="btn" id="hSalvar">Salvar horários</button></div>`;
+    desenharH();
+    $("#hDias").onchange = e => { const k = e.target.dataset.k; if (!k) return; const d = e.target.closest("[data-d]").dataset.d;
+      H[d][k] = e.target.type === "checkbox" ? e.target.checked : e.target.value; if (k === "aberto") desenharH(); else e.target.closest(".dia-card").querySelector(".dia-resumo").textContent = `${H[d].abre} – ${H[d].fecha}${H[d].almocoIni ? " · pausa " + H[d].almocoIni : ""}`; };
+    $("#hDias").onclick = e => { const b = e.target.closest("[data-a]"); if (!b) return; const d = b.closest("[data-d]").dataset.d, h = H[d];
+      if (b.dataset.a === "com-pausa") { h.almocoIni = "12:00"; h.almocoFim = "13:00"; }
+      if (b.dataset.a === "sem-pausa") { h.almocoIni = ""; h.almocoFim = ""; }
+      if (b.dataset.a === "copiar") { ORDEM.forEach(x => { if (H[x].aberto && x != d) Object.assign(H[x], { abre: h.abre, fecha: h.fecha, almocoIni: h.almocoIni, almocoFim: h.almocoFim }); }); U.toast("Copiado para os dias abertos. Toque em Salvar."); }
+      desenharH(); };
     $("#hSalvar").onclick = () => {
-      for (const d in H) { const h = H[d];
-        if (h.aberto && (!h.abre || !h.fecha || h.abre >= h.fecha)) return U.toast(`Confira o horário de ${DIAS[d]}.`);
-        if ((h.almocoIni && !h.almocoFim) || (!h.almocoIni && h.almocoFim) || (h.almocoIni && h.almocoIni >= h.almocoFim)) return U.toast(`Confira a pausa de ${DIAS[d]}.`); }
+      for (const d of ORDEM) { const h = H[d]; delete h._pausa;
+        if (h.aberto && (!h.abre || !h.fecha || h.abre >= h.fecha)) return U.toast(`${DIAS[d]}: o horário de fechar precisa ser depois do de abrir.`);
+        if ((h.almocoIni && !h.almocoFim) || (!h.almocoIni && h.almocoFim)) return U.toast(`${DIAS[d]}: preencha o início e a volta da pausa.`);
+        if (h.almocoIni && (h.almocoIni >= h.almocoFim || h.almocoIni < h.abre || h.almocoFim > h.fecha)) return U.toast(`${DIAS[d]}: a pausa precisa ficar dentro do horário aberto.`); }
       salvarCfg({ horarios: H, intervalo: +$("#hInt").value, antecedenciaMin: +$("#hAnt").value, diasAgenda: +$("#hDias2").value });
     };
   }
 
-  // ---------- ASSINATURA (dono) ----------
-  function assin() {
-    const b = ctx.b, se = A.statusEfetivo(b, U.hoje()), plano = P.planos.find(p => p.id === b.plano);
+  // ---------- ASSINATURA (dono) — cobrança recorrente pelo Asaas ----------
+  const FORMAS = { CREDIT_CARD: "Cartão de crédito", PIX: "Pix", BOLETO: "Boleto" };
+  const ST_FAT = { PENDING: ["Em aberto", "agendado"], OVERDUE: ["Vencida", "cancelado"], RECEIVED: ["Paga", "concluido"], CONFIRMED: ["Paga", "concluido"],
+    RECEIVED_IN_CASH: ["Paga", "concluido"], REFUNDED: ["Estornada", "cancelado"], REFUND_REQUESTED: ["Estorno pedido", "cancelado"],
+    CHARGEBACK_REQUESTED: ["Contestada", "cancelado"], AWAITING_RISK_ANALYSIS: ["Em análise", "agendado"] };
+  const mascaraDoc = v => { const d = U.soDig(v).slice(0, 14);
+    return d.length <= 11 ? d.replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})$/, "$1-$2")
+      : d.replace(/^(\d{2})(\d)/, "$1.$2").replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3").replace(/\.(\d{3})(\d)/, ".$1/$2").replace(/(\d{4})(\d)/, "$1-$2"); };
+  async function assin() {
+    const b = ctx.b, se = A.statusEfetivo(b, U.hoje());
+    box().innerHTML = `<p class="vazio">Carregando assinatura…</p>`;
+    let planos = [], info = { assinatura: null, faturas: [] }, erroInfo = "";
+    try { planos = await U.planos(); } catch (e) { box().innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
+    if (b.asaas_subscription_id) { try { info = await S.assinatura(ctx.bid, "info"); } catch (e) { erroInfo = e.message; } }
+    if (aba !== "assin") return;
+    const plano = planos.find(p => p.id === b.plano) || { nome: b.plano, preco: 0 };
     const dias = b.vence_em ? Math.round((A.parseYMD(b.vence_em) - A.parseYMD(U.hoje())) / 864e5) : null;
-    box().innerHTML = `<div class="assin-card st-${esc(se)}"><span class="tag ${A.liberada(b, U.hoje()) ? "concluido" : "cancelado"}">${esc(STATUS[se] || se)}</span>
-      <p class="quando">${esc(plano ? plano.nome : b.plano)}</p>
-      <p>${b.vence_em ? (dias >= 0 ? `${b.status === "teste" ? "Teste até" : "Válida até"} <b>${esc(fmtData(b.vence_em, true))}</b> (${dias === 0 ? "hoje" : dias + " dia(s)"})` : `Venceu em <b>${esc(fmtData(b.vence_em, true))}</b>`) : "Sem data de vencimento"}</p></div>
-      <h2>Planos</h2><div class="planos">${P.planos.map(p => `<div class="plano ${p.id === b.plano ? "destaque" : ""}">${p.id === b.plano ? `<span class="tag agendado">Seu plano</span>` : ""}
-        <h3>${esc(p.nome)}</h3><p class="preco-plano">${money(p.preco)}<small>/mês</small></p><p>${esc(p.desc)}</p>
-        <a class="btn ${p.id === b.plano ? "" : "btn-sec"}" target="_blank" rel="noopener" href="${esc(wa(P.suporteWhatsapp, `Olá! Quero ${p.id === b.plano ? "renovar" : "assinar"} o plano ${p.nome} para a ${b.nome} (${U.abs("/" + b.slug)}).`))}">${p.id === b.plano ? "Renovar" : "Quero este plano"}</a></div>`).join("")}</div>
-      <p class="sub">O pagamento online entra em breve. Por enquanto a ativação é feita pelo nosso suporte no WhatsApp.</p>`;
+    const sub = info.assinatura, abertas = info.faturas.filter(f => ["PENDING", "OVERDUE"].includes(f.status));
+    let linha = "";
+    if (b.status === "teste" && !b.asaas_subscription_id) linha = dias >= 0 ? `Teste grátis até <b>${esc(fmtData(b.vence_em, true))}</b> (${dias === 0 ? "termina hoje" : dias + " dia(s)"})` : `Seu teste terminou em <b>${esc(fmtData(b.vence_em, true))}</b>`;
+    else if (b.vence_em) linha = dias >= 0 ? `Liberada até <b>${esc(fmtData(b.vence_em, true))}</b>` : `Venceu em <b>${esc(fmtData(b.vence_em, true))}</b>`;
+    box().innerHTML = `<div class="assin-card st-${esc(se)}">
+        <div class="assin-top"><div><small>Seu plano</small><p class="quando">${esc(plano.nome)}</p></div>
+        <span class="tag ${A.liberada(b, U.hoje()) ? (se === "carencia" ? "cancelado" : "concluido") : "cancelado"}">${esc(STATUS[se] || se)}</span></div>
+        <p>${linha}</p>
+        ${sub ? `<p class="sub">${esc(FORMAS[sub.forma] || sub.forma)} · ${money(sub.valor)}/mês${sub.proxima ? ` · próxima cobrança ${esc(fmtData(sub.proxima))}` : ""}${sub.forma === "CREDIT_CARD" ? " · débito automático" : ""}</p>` : ""}
+        ${abertas.length ? `<a class="btn btn-ok" target="_blank" rel="noopener" href="${esc(abertas[abertas.length - 1].url)}">Pagar fatura de ${money(abertas[abertas.length - 1].valor)}</a>` : ""}
+      </div>
+      ${erroInfo ? `<p class="aviso ruim">Não foi possível consultar a cobrança agora: ${esc(erroInfo)}</p>` : ""}
+      ${b.asaas_subscription_id ? `
+        <h2>Faturas</h2>${info.faturas.length ? `<div class="faturas">${info.faturas.map(f => { const [t, cl] = ST_FAT[f.status] || [f.status, ""];
+          return `<div class="fatura"><div><b>${money(f.valor)}</b><small>Vence ${esc(fmtData(f.vencimento))} · ${esc(FORMAS[f.forma] || f.forma || "")}${f.pago_em ? " · paga " + esc(fmtData(f.pago_em)) : ""}</small></div>
+            <span class="tag ${cl}">${esc(t)}</span>${f.url ? `<a class="btn btn-mini ${["PENDING", "OVERDUE"].includes(f.status) ? "btn-ok" : "btn-sec"}" target="_blank" rel="noopener" href="${esc(f.url)}">${["PENDING", "OVERDUE"].includes(f.status) ? "Pagar" : "Ver"}</a>` : ""}</div>`; }).join("")}</div>` : `<p class="vazio">Nenhuma fatura ainda.</p>`}
+        <div class="seg" style="margin-top:18px"><button class="btn btn-sec" id="aTrocar">Trocar plano ou forma de pagamento</button><button class="btn btn-sec perigo-txt" id="aCancelar">Cancelar assinatura</button></div>`
+      : `<h2>Assinar o ${esc(P.nome)}</h2><div id="aForm"></div>`}`;
+    if (!b.asaas_subscription_id) formAssinar(planos, false);
+    const tr = $("#aTrocar"); if (tr) tr.onclick = () => { const m = U.modal(`<h2>Trocar plano ou pagamento</h2><div id="aForm"></div>`); formAssinar(planos, true, m); };
+    const cc = $("#aCancelar"); if (cc) cc.onclick = () => {
+      const m = U.modal(`<h2>Cancelar assinatura?</h2><p>Não haverá novas cobranças. Sua agenda online continua funcionando até <b>${esc(b.vence_em ? fmtData(b.vence_em, true) : "o fim do período pago")}</b> e depois pausa. Seus dados ficam guardados.</p>
+        <div class="pilha"><button class="btn" id="cSim">Cancelar assinatura</button><button class="btn btn-sec" data-fechar>Manter assinatura</button></div>`);
+      m.querySelector("#cSim").onclick = async () => { try { await S.assinatura(ctx.bid, "cancelar"); U.fecharModal(); U.toast("Assinatura cancelada."); ctx.b = await S.barbearia(ctx.bid); desenhar(); } catch (e) { U.toast(e.message); } };
+    };
+  }
+  function formAssinar(planos, troca, raiz) {
+    const b = ctx.b, el = (raiz || document).querySelector("#aForm");
+    let sel = planos.some(p => p.id === b.plano) ? b.plano : (planos[0] || {}).id, forma = b.forma_pagamento || "CREDIT_CARD";
+    const ativos = ctx.profs.filter(p => p.ativo).length;
+    el.innerHTML = `<form id="fAss" novalidate>
+      <fieldset><legend class="leg-p">Plano</legend><div class="planos-sel">${planos.map(p => { const cabe = !p.max_prof || ativos <= p.max_prof;
+        return `<label class="op ${cabe ? "" : "ocupado"}"><input type="radio" name="plano" value="${esc(p.id)}" ${p.id === sel ? "checked" : ""} ${cabe ? "" : "disabled"}>
+          <span><b>${esc(p.nome)}</b><span class="preco-op">${money(p.preco)}<small>/mês</small></span><small>${p.max_prof ? `Até ${p.max_prof} barbeiro${p.max_prof > 1 ? "s" : ""}` : "Barbeiros ilimitados"}${cabe ? "" : ` · você tem ${ativos}`}</small></span></label>`; }).join("")}</div></fieldset>
+      <fieldset><legend class="leg-p">Forma de pagamento</legend><div class="formas">
+        ${[["CREDIT_CARD", "Cartão de crédito", "Cobrança automática todo mês. Você não precisa lembrar."], ["PIX", "Pix", "Fatura todo mês por e-mail; pode virar Pix Automático."], ["BOLETO", "Boleto", "Fatura todo mês por e-mail. Compensa em até 3 dias úteis."]]
+          .map(([v, t, d]) => `<label class="op"><input type="radio" name="forma" value="${v}" ${v === forma ? "checked" : ""}><span><b>${t}${v === "CREDIT_CARD" ? ` <em class="rec">recomendado</em>` : ""}</b><small class="quebra">${d}</small></span></label>`).join("")}</div></fieldset>
+      ${b.asaas_customer_id ? "" : `<div class="form-grid">
+        <label>CPF ou CNPJ do responsável<input name="doc" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00" maxlength="18" required></label>
+        <label>Celular (opcional)<input name="tel" type="tel" inputmode="tel" autocomplete="tel" placeholder="(38) 99999-0000"></label></div>`}
+      <p class="sub">${troca ? "A mudança vale para as faturas em aberto e as próximas." : b.status === "teste" && b.vence_em >= U.hoje() ? `Seus dias de teste continuam valendo: a 1ª mensalidade vence em <b>${esc(fmtData(b.vence_em))}</b>. Se pagar antes, o mês pago começa no fim do teste.` : "A 1ª mensalidade vence hoje e libera sua agenda assim que o pagamento for confirmado."}
+        O pagamento é feito na página segura do Asaas: o ${esc(P.nome)} não vê os dados do seu cartão.</p>
+      <p class="erro" id="aErro" role="alert"></p>
+      <button class="btn btn-grande" id="aBtn" style="width:100%"></button>${troca ? `<button type="button" class="btn btn-sec" data-fechar style="width:100%;margin-top:8px">Voltar</button>` : ""}</form>`;
+    const f = el.querySelector("#fAss"), btn = el.querySelector("#aBtn");
+    const rot = () => { const p = planos.find(x => x.id === sel); btn.textContent = p ? `${troca ? "Confirmar" : "Assinar"} ${p.nome} · ${money(p.preco)}/mês` : "Escolha um plano"; };
+    rot();
+    f.onchange = e => { if (e.target.name === "plano") sel = e.target.value; if (e.target.name === "forma") forma = e.target.value; rot(); };
+    if (f.doc) f.doc.oninput = () => { f.doc.value = mascaraDoc(f.doc.value); };
+    f.onsubmit = async e => {
+      e.preventDefault(); const err = el.querySelector("#aErro"); err.textContent = "";
+      if (f.doc && ![11, 14].includes(U.soDig(f.doc.value).length)) { err.textContent = "Digite o CPF (11 números) ou CNPJ (14 números)."; return; }
+      btn.disabled = true; btn.textContent = "Gerando cobrança…";
+      try {
+        const r = await S.assinatura(ctx.bid, "assinar", { plano: sel, forma, cpfCnpj: f.doc ? f.doc.value : undefined, telefone: f.tel ? f.tel.value : undefined, nome: (S.usuario() || {}).email });
+        ctx.b = await S.barbearia(ctx.bid); U.ls.set("lk_planos", null);
+        const m = U.modal(`<h2>${troca ? "Assinatura atualizada" : "Falta só pagar"}</h2>
+          <p>${r.url ? (forma === "CREDIT_CARD" ? "Cadastre o cartão na página do Asaas. As próximas mensalidades são cobradas sozinhas." : "Pague a fatura na página do Asaas. As próximas chegam por e-mail todo mês.") : "Tudo certo. As próximas faturas seguem a nova configuração."}</p>
+          <div class="pilha">${r.url ? `<a class="btn btn-ok btn-grande" target="_blank" rel="noopener" href="${esc(r.url)}">Ir para o pagamento</a>` : ""}
+          <button class="btn btn-sec" id="jaPaguei">${r.url ? "Já paguei" : "Fechar"}</button></div>`);
+        m.querySelector("#jaPaguei").onclick = () => { U.fecharModal(); aguardarPagamento(); };
+      } catch (er) { err.textContent = er.message; btn.disabled = false; rot(); }
+    };
+  }
+  // o webhook do Asaas libera a barbearia; aqui só esperamos a confirmação aparecer
+  async function aguardarPagamento() {
+    const antes = ctx.b.vence_em; aba = "assin"; desenhar();
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 5000));
+      try { const b = await S.barbearia(ctx.bid); if (b.vence_em !== antes || b.status !== ctx.b.status) { ctx.b = b; U.toast("Pagamento confirmado!"); if (aba === "assin") desenhar(); return; } } catch {}
+    }
+    if (aba === "assin") U.toast("Assim que o Asaas confirmar, a assinatura atualiza sozinha. Pix e cartão costumam levar segundos; boleto, até 3 dias úteis.");
+  }
+
+  // ---------- ÍCONE DA BARBEARIA ----------
+  // Gera 3 PNGs no próprio navegador: 512 e 192 (ícone e topo) e 512 "maskable" (Android recorta em círculo/gota).
+  function carregarImagem(arq) {
+    return new Promise((ok, falha) => { const img = new Image(); img.onload = () => ok(img); img.onerror = () => falha(new Error("Não consegui abrir essa imagem.")); img.src = URL.createObjectURL(arq); });
+  }
+  function desenharIcone(img, tam, { modo, fundo, zoom = 1, margem = 0 }) {
+    const c = document.createElement("canvas"); c.width = c.height = tam; const g = c.getContext("2d");
+    g.imageSmoothingQuality = "high";
+    if (modo === "caber" || margem) { g.fillStyle = fundo; g.fillRect(0, 0, tam, tam); }
+    const area = tam * (1 - margem * 2), lado = modo === "preencher" ? Math.min(img.width, img.height) : Math.max(img.width, img.height);
+    const esc_ = (area / lado) * (modo === "preencher" ? zoom : zoom * 0.86), w = img.width * esc_, h = img.height * esc_;
+    g.drawImage(img, (tam - w) / 2, (tam - h) / 2, w, h);
+    return c;
+  }
+  const blobDe = c => new Promise(ok => c.toBlob(ok, "image/png"));
+  async function escolherIcone() {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp";
+    inp.onchange = async () => {
+      const arq = inp.files[0]; if (!arq) return;
+      if (arq.size > 8 * 1024 * 1024) return U.toast("Imagem muito grande (máximo 8 MB).");
+      let img; try { img = await carregarImagem(arq); } catch (e) { return U.toast(e.message); }
+      const op = { modo: Math.abs(img.width - img.height) / Math.max(img.width, img.height) < 0.08 ? "preencher" : "caber", fundo: "#ffffff", zoom: 1 };
+      const m = U.modal(`<h2>Ícone da barbearia</h2><p class="sub" style="margin-top:-6px">Aparece no app instalado do cliente, no topo da página e no painel.</p>
+        <div class="icone-prev"><div class="cel-ic"><canvas id="pvApp" width="192" height="192"></canvas><small>${esc(ctx.b.nome.slice(0, 14))}</small></div>
+          <div class="topo-ic"><canvas id="pvTopo" width="192" height="192"></canvas><b>${esc(ctx.b.nome)}</b></div></div>
+        <div class="seg" role="radiogroup" aria-label="Ajuste"><button class="chip" data-modo="preencher">Preencher</button><button class="chip" data-modo="caber">Mostrar inteira</button></div>
+        <label class="lbl">Zoom<input type="range" id="icZoom" min="0.6" max="2" step="0.02" value="1"></label>
+        <div class="lbl" id="icFundoBox">Cor de fundo <div class="cores">${["#ffffff", "#16181d", "#c8102e", "#1b3a6b", "#f2c14e", "#0f5132"].map(c => `<button class="cor" data-cor="${c}" style="background:${c}" aria-label="Fundo ${c}"></button>`).join("")}<input type="color" id="icCor" value="#ffffff" aria-label="Outra cor"></div></div>
+        <p class="erro" id="icErro"></p>
+        <div class="pilha"><button class="btn" id="icSalvar">Usar este ícone</button><button class="btn btn-sec" data-fechar>Cancelar</button></div>`);
+      const atual = () => { ["pvApp", "pvTopo"].forEach(id => { const cv = m.querySelector("#" + id), g = cv.getContext("2d"); g.clearRect(0, 0, 192, 192); g.drawImage(desenharIcone(img, 192, op), 0, 0); });
+        m.querySelectorAll("[data-modo]").forEach(b => b.classList.toggle("on", b.dataset.modo === op.modo));
+        m.querySelectorAll("[data-cor]").forEach(b => b.classList.toggle("on", b.dataset.cor === op.fundo)); };
+      atual();
+      m.querySelector(".seg").onclick = e => { const b = e.target.closest("[data-modo]"); if (b) { op.modo = b.dataset.modo; atual(); } };
+      m.querySelector("#icZoom").oninput = e => { op.zoom = +e.target.value; atual(); };
+      m.querySelector(".cores").onclick = e => { const b = e.target.closest("[data-cor]"); if (b) { op.fundo = b.dataset.cor; atual(); } };
+      m.querySelector("#icCor").oninput = e => { op.fundo = e.target.value; atual(); };
+      m.querySelector("#icSalvar").onclick = async ev => {
+        const btn = ev.target; btn.disabled = true; btn.textContent = "Enviando…";
+        try {
+          const fundoMask = op.modo === "caber" ? op.fundo : op.fundo;
+          const arqs = [{ nome: "icon-512.png", blob: await blobDe(desenharIcone(img, 512, op)) }, { nome: "icon-192.png", blob: await blobDe(desenharIcone(img, 192, op)) },
+            { nome: "maskable-512.png", blob: await blobDe(desenharIcone(img, 512, Object.assign({}, op, { modo: "caber", fundo: fundoMask, margem: 0.1, zoom: op.modo === "preencher" ? op.zoom * 1.16 : op.zoom }))) }];
+          await S.enviarLogo(ctx.bid, arqs);
+          await salvarCfg({ logo: { v: Date.now(), fundo: op.fundo } });
+          U.fecharModal(); desenhar();
+        } catch (e) { m.querySelector("#icErro").textContent = e.message; btn.disabled = false; btn.textContent = "Usar este ícone"; }
+      };
+    };
+    inp.click();
   }
 
   // ---------- AJUSTES (dono) ----------
   function aj() {
     const c = cfg(), link = U.abs("/" + ctx.b.slug);
-    box().innerHTML = `<h2>Seu link</h2>
+    const ic = U.iconesDe(ctx.bid, c.logo);
+    box().innerHTML = `<h2>Ícone da barbearia</h2>
+      <div class="icone-atual"><div class="ic-grande">${ic ? `<img src="${esc(ic.i192)}" alt="Ícone atual" width="88" height="88">` : `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#poste"/></svg>`}</div>
+        <div><p class="sub" style="margin:0 0 10px">${ic ? "Este é o ícone do app instalado pelos seus clientes." : "Sem ícone próprio: os clientes veem o poste de barbeiro."} Use o logo em PNG ou JPG, de preferência quadrado.</p>
+        <div class="seg" style="margin:0"><button class="btn btn-mini" id="ajIcone">${ic ? "Trocar ícone" : "Enviar ícone"}</button>${ic ? `<button class="btn btn-mini btn-sec" id="ajSemIcone">Remover</button>` : ""}</div></div></div>
+      <h2 style="margin-top:28px">Seu link</h2>
       <div class="link-box"><input readonly value="${esc(link)}" onclick="this.select()"><button class="btn btn-sec" id="ajCp">Copiar</button></div>
       <div class="seg" style="margin-top:10px"><a class="btn btn-ok btn-mini" target="_blank" rel="noopener" href="${esc("https://wa.me/?text=" + encodeURIComponent("Agende seu horário na " + ctx.b.nome + ": " + link))}">Compartilhar no WhatsApp</a>
         <button class="btn btn-mini btn-sec" id="ajQr">Gerar QR Code</button></div><div id="qr" class="qr"></div>
@@ -426,6 +601,8 @@
       <h2 style="margin-top:28px">Avisos de novos agendamentos</h2><p class="sub">Com o painel aberto, chega um aviso a cada novo agendamento.</p>
       <button class="btn btn-sec" id="ajNotif">Ativar notificações</button>
       <h2 style="margin-top:28px">Backup</h2><button class="btn btn-sec" id="ajExp">Baixar agendamentos (CSV)</button>`;
+    $("#ajIcone").onclick = escolherIcone;
+    const si = $("#ajSemIcone"); if (si) si.onclick = async () => { await salvarCfg({ logo: null }); desenhar(); };
     $("#ajCp").onclick = () => U.copiar(link);
     $("#ajQr").onclick = () => qr(link);
     $("#fAj").onsubmit = e => {

@@ -1,9 +1,9 @@
 -- ============================================================
--- Agenda Barber — banco multi-barbearia (Supabase)
--- 1) SQL Editor → cole tudo → Run.
--- 2) Authentication → Providers → Email: deixe "Allow new users to sign up" LIGADO
---    (as barbearias se cadastram sozinhas). "Confirm email" pode ficar ligado ou não.
--- 3) Crie sua conta (cadastre-se no site ou Authentication → Add user) e torne-se super admin:
+-- LKBarber — banco multi-barbearia (Supabase)
+-- Passo a passo completo no LEIAME.md. Resumo:
+-- 1) SQL Editor → cole tudo → Run (pode rodar de novo sem perder dados).
+-- 2) Authentication → Sign In / Providers → Email: deixe o cadastro de usuários LIGADO.
+-- 3) Crie sua conta pelo site (/cadastro) e torne-se super admin:
 --      insert into plataforma_admins (user_id)
 --      select id from auth.users where email = 'SEU-EMAIL@exemplo.com';
 -- ============================================================
@@ -12,17 +12,54 @@ create extension if not exists pgcrypto;
 -- ---------------- TABELAS ----------------
 create table if not exists plataforma_admins (user_id uuid primary key references auth.users on delete cascade);
 
+-- Planos: você edita preço e limite em /admin (ou aqui). O valor cobrado vem daqui, nunca do navegador.
+create table if not exists planos (
+  id text primary key check (id ~ '^[a-z0-9-]{2,30}$'),
+  nome text not null,
+  preco numeric(10,2) not null check (preco >= 0),
+  max_prof int check (max_prof is null or max_prof > 0),   -- null = ilimitado
+  descricao text default '',
+  ordem int not null default 0,
+  ativo boolean not null default true
+);
+insert into planos (id, nome, preco, max_prof, descricao, ordem) values
+  ('solo', 'Solo', 39.90, 1, 'Para quem atende sozinho.', 0),
+  ('equipe', 'Equipe', 69.90, 5, 'Até 5 barbeiros, cada um com sua agenda.', 1),
+  ('ilimitado', 'Ilimitado', 99.90, null, 'Barbeiros sem limite e relatórios por profissional.', 2)
+on conflict (id) do nothing;
+
 create table if not exists barbearias (
   id uuid primary key default gen_random_uuid(),
   slug text not null unique check (slug ~ '^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$'),
   nome text not null,
   config jsonb not null default '{}'::jsonb,
   status text not null default 'teste' check (status in ('teste','ativa','bloqueada')),
-  plano text not null default 'solo' check (plano in ('solo','equipe','ilimitado')),
+  plano text not null default 'solo' references planos,
   vence_em date,
   dono_email text,
   criado_em timestamptz not null default now()
 );
+-- cobrança (Asaas)
+alter table barbearias add column if not exists asaas_customer_id text;
+alter table barbearias add column if not exists asaas_subscription_id text;
+alter table barbearias add column if not exists forma_pagamento text;           -- CREDIT_CARD | PIX | BOLETO
+alter table barbearias add column if not exists ultimo_pagamento_em timestamptz;
+create index if not exists barb_sub_idx on barbearias (asaas_subscription_id);
+
+-- histórico de cobranças recebidas pelo webhook
+create table if not exists pagamentos (
+  id text primary key,                         -- id da cobrança no Asaas (pay_...)
+  barbearia_id uuid references barbearias on delete set null,
+  valor numeric(10,2),
+  status text,
+  forma text,
+  vencimento date,
+  pago_em date,
+  fatura_url text,
+  creditado boolean not null default false,    -- já somou 1 mês na assinatura?
+  atualizado_em timestamptz not null default now()
+);
+create table if not exists webhook_eventos (id text primary key, evento text, recebido_em timestamptz not null default now());
 
 create table if not exists profissionais (
   id uuid primary key default gen_random_uuid(),
@@ -89,8 +126,12 @@ create or replace function papel_em(p_bid uuid) returns text language sql stable
 create or replace function meu_prof(p_bid uuid) returns uuid language sql stable security definer set search_path = public as $$
   select prof_id from membros where user_id = auth.uid() and barbearia_id = p_bid $$;
 create or replace function hoje_br() returns date language sql stable as $$ select (now() at time zone 'America/Sao_Paulo')::date $$;
+-- teste vence no dia; assinatura paga tem 3 dias de carência (boleto/Pix compensando)
 create or replace function liberada(b barbearias) returns boolean language sql stable as $$
-  select b.status <> 'bloqueada' and (b.vence_em is null or b.vence_em >= hoje_br()) $$;
+  select b.status <> 'bloqueada' and (b.vence_em is null
+    or (case when b.status = 'teste' then b.vence_em else b.vence_em + 3 end) >= hoje_br()) $$;
+create or replace function e_servidor() returns boolean language sql stable as $$
+  select current_user in ('service_role', 'postgres', 'supabase_admin') $$;
 
 -- ---------------- RLS ----------------
 alter table plataforma_admins enable row level security;
@@ -98,8 +139,15 @@ alter table barbearias enable row level security;
 alter table profissionais enable row level security;
 alter table membros enable row level security;
 alter table convites enable row level security;
+alter table planos enable row level security;
+alter table pagamentos enable row level security;
+alter table webhook_eventos enable row level security;
 alter table agendamentos enable row level security;
 alter table bloqueios enable row level security;
+
+drop policy if exists pl_sel on planos;  create policy pl_sel on planos for select using (true);
+drop policy if exists pl_adm on planos;  create policy pl_adm on planos for all to authenticated using (is_super()) with check (is_super());
+drop policy if exists pg_sel on pagamentos; create policy pg_sel on pagamentos for select to authenticated using (is_super() or papel_em(barbearia_id) = 'dono');
 
 drop policy if exists b_sel on barbearias;  create policy b_sel on barbearias for select to authenticated using (is_super() or papel_em(id) is not null);
 drop policy if exists b_upd on barbearias;  create policy b_upd on barbearias for update to authenticated using (is_super() or papel_em(id) = 'dono') with check (is_super() or papel_em(id) = 'dono');
@@ -127,8 +175,10 @@ drop policy if exists bl_del on bloqueios; create policy bl_del on bloqueios for
 -- Dono não altera a própria assinatura (status, plano, vencimento, endereço): só o super admin.
 create or replace function proteger_assinatura() returns trigger language plpgsql as $$
 begin
-  if not is_super() and (new.status is distinct from old.status or new.plano is distinct from old.plano
-     or new.vence_em is distinct from old.vence_em or new.slug is distinct from old.slug or new.dono_email is distinct from old.dono_email) then
+  if not is_super() and not e_servidor() and (new.status is distinct from old.status or new.plano is distinct from old.plano
+     or new.vence_em is distinct from old.vence_em or new.slug is distinct from old.slug or new.dono_email is distinct from old.dono_email
+     or new.asaas_customer_id is distinct from old.asaas_customer_id or new.asaas_subscription_id is distinct from old.asaas_subscription_id
+     or new.forma_pagamento is distinct from old.forma_pagamento or new.ultimo_pagamento_em is distinct from old.ultimo_pagamento_em) then
     raise exception 'somente o administrador da plataforma pode alterar a assinatura';
   end if;
   return new;
@@ -138,11 +188,10 @@ create trigger trg_proteger before update on barbearias for each row execute fun
 
 -- Limite de barbeiros ativos por plano.
 create or replace function limite_profissionais() returns trigger language plpgsql security definer set search_path = public as $$
-declare v_plano text; v_max int; v_n int;
+declare v_max int; v_n int;
 begin
   if not new.ativo then return new; end if;
-  select plano into v_plano from barbearias where id = new.barbearia_id;
-  v_max := case v_plano when 'solo' then 1 when 'equipe' then 5 else null end;
+  select p.max_prof into v_max from barbearias b join planos p on p.id = b.plano where b.id = new.barbearia_id;
   if v_max is null then return new; end if;
   select count(*) into v_n from profissionais where barbearia_id = new.barbearia_id and ativo and id <> new.id;
   if v_n >= v_max then raise exception 'limite_plano'; end if;
@@ -281,11 +330,92 @@ create or replace function todas_barbearias() returns json language plpgsql stab
 begin
   if not is_super() then raise exception 'sem permissao'; end if;
   return (select coalesce(json_agg(json_build_object('id', b.id, 'slug', b.slug, 'nome', b.nome, 'status', b.status, 'plano', b.plano,
-      'vence_em', b.vence_em, 'dono_email', b.dono_email, 'criado_em', b.criado_em,
+      'vence_em', b.vence_em, 'dono_email', b.dono_email, 'criado_em', b.criado_em, 'logo', b.config->>'logo',
+      'assinatura', b.asaas_subscription_id is not null, 'forma_pagamento', b.forma_pagamento, 'ultimo_pagamento_em', b.ultimo_pagamento_em,
       'n_profs', (select count(*) from profissionais p where p.barbearia_id = b.id and p.ativo),
       'n_ags_30', (select count(*) from agendamentos a where a.barbearia_id = b.id and a.data >= hoje_br() - 30 and a.status <> 'cancelado'))
     order by b.criado_em desc), '[]'::json) from barbearias b);
 end $$;
+
+-- ---------------- COBRANÇA: processamento do webhook do Asaas ----------------
+-- Chamado só pela Edge Function asaas-webhook (chave secreta). Idempotente: o mesmo evento ou a
+-- mesma cobrança nunca soma mês duas vezes (CONFIRMED e RECEIVED chegam para o mesmo pagamento).
+create or replace function processar_pagamento_asaas(p_evento_id text, p_evento text, p jsonb)
+returns text language plpgsql security definer set search_path = public as $$
+declare v_b barbearias; v_pg pagamentos; v_venc date;
+begin
+  if p_evento_id is not null then
+    insert into webhook_eventos (id, evento) values (p_evento_id, p_evento) on conflict do nothing;
+    if not found then return 'duplicado'; end if;
+  end if;
+  if p is null or p->>'id' is null then return 'sem cobranca'; end if;
+
+  select * into v_b from barbearias
+   where (p->>'subscription' is not null and asaas_subscription_id = p->>'subscription')
+      or (p->>'externalReference' is not null and id::text = p->>'externalReference')
+      or (p->>'customer' is not null and asaas_customer_id = p->>'customer')
+   order by (asaas_subscription_id = p->>'subscription') desc nulls last limit 1;
+
+  insert into pagamentos (id, barbearia_id, valor, status, forma, vencimento, pago_em, fatura_url)
+  values (p->>'id', v_b.id, (p->>'value')::numeric, p->>'status', p->>'billingType', (p->>'dueDate')::date,
+          coalesce((p->>'paymentDate')::date, (p->>'confirmedDate')::date), p->>'invoiceUrl')
+  on conflict (id) do update set status = excluded.status, valor = excluded.valor, vencimento = excluded.vencimento,
+     pago_em = coalesce(excluded.pago_em, pagamentos.pago_em), fatura_url = coalesce(excluded.fatura_url, pagamentos.fatura_url),
+     barbearia_id = coalesce(pagamentos.barbearia_id, excluded.barbearia_id), atualizado_em = now()
+  returning * into v_pg;
+
+  if v_b.id is null then return 'barbearia nao encontrada'; end if;
+
+  if p_evento in ('PAYMENT_CONFIRMED', 'PAYMENT_RECEIVED') and not v_pg.creditado then
+    v_venc := greatest(coalesce(v_b.vence_em, hoje_br()), coalesce(v_pg.vencimento, hoje_br()), hoje_br() - 3);
+    update barbearias set status = case when status = 'bloqueada' then status else 'ativa' end,
+           vence_em = (v_venc + interval '1 month')::date, ultimo_pagamento_em = now() where id = v_b.id;
+    update pagamentos set creditado = true where id = v_pg.id;
+    return 'creditado';
+  end if;
+
+  if p_evento in ('PAYMENT_REFUNDED', 'PAYMENT_CHARGEBACK_REQUESTED', 'PAYMENT_DELETED') and v_pg.creditado then
+    update barbearias set vence_em = (vence_em - interval '1 month')::date where id = v_b.id;
+    update pagamentos set creditado = false where id = v_pg.id;
+    return 'estornado';
+  end if;
+  return 'registrado';
+end $$;
+
+create or replace function encerrar_assinatura_asaas(p_evento_id text, p_sub text) returns text
+language plpgsql security definer set search_path = public as $$
+begin
+  if p_evento_id is not null then
+    insert into webhook_eventos (id, evento) values (p_evento_id, 'SUBSCRIPTION_END') on conflict do nothing;
+    if not found then return 'duplicado'; end if;
+  end if;
+  update barbearias set asaas_subscription_id = null where asaas_subscription_id = p_sub;
+  return 'encerrada';
+end $$;
+
+revoke all on function processar_pagamento_asaas(text, text, jsonb), encerrar_assinatura_asaas(text, text) from public, anon, authenticated;
+grant execute on function processar_pagamento_asaas(text, text, jsonb), encerrar_assinatura_asaas(text, text) to service_role;
+
+-- ---------------- ÍCONE DA BARBEARIA (Storage) ----------------
+-- Bucket público "logos": logos/<barbearia_id>/icon-512.png etc. Só o dono grava na pasta da barbearia dele.
+do $do$ begin
+  if exists (select 1 from information_schema.schemata where schema_name = 'storage') then
+    insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+    values ('logos', 'logos', true, 1048576, array['image/png', 'image/jpeg', 'image/webp'])
+    on conflict (id) do update set public = true;
+    execute 'drop policy if exists logos_ler on storage.objects';
+    execute $p$create policy logos_ler on storage.objects for select using (bucket_id = 'logos')$p$;
+    execute 'drop policy if exists logos_gravar on storage.objects';
+    execute $p$create policy logos_gravar on storage.objects for insert to authenticated
+      with check (bucket_id = 'logos' and papel_em(((storage.foldername(name))[1])::uuid) = 'dono')$p$;
+    execute 'drop policy if exists logos_trocar on storage.objects';
+    execute $p$create policy logos_trocar on storage.objects for update to authenticated
+      using (bucket_id = 'logos' and papel_em(((storage.foldername(name))[1])::uuid) = 'dono')$p$;
+    execute 'drop policy if exists logos_apagar on storage.objects';
+    execute $p$create policy logos_apagar on storage.objects for delete to authenticated
+      using (bucket_id = 'logos' and papel_em(((storage.foldername(name))[1])::uuid) = 'dono')$p$;
+  end if;
+end $do$;
 
 -- ---------------- GRANTS ----------------
 revoke all on function slug_disponivel(text), dados_publicos(text), horarios_ocupados(text, date, date),

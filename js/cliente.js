@@ -23,8 +23,9 @@
     catch { const c = ls.get("bb_cache_" + slug, null); if (c) { atual = { slug, b: c.b, cfg: c.b.config, profs: c.profs, carregado: 0 }; d = atual; U.toast("Sem conexão: mostrando dados salvos."); } }
     if (!d) return naoEncontrada(slug);
     const base = "/" + slug, nome = d.b.nome;
-    document.title = nome; U.manifestPara(nome, base); ls.set("bb_ultima", slug);
-    U.moldura({ marca: nome, marcaHref: base, ativo: view, tabs: [
+    const ic = U.iconesDe(d.b.id, d.cfg.logo);
+    document.title = nome; U.manifestPara(nome, base, ic); ls.set("bb_ultima", slug);
+    U.moldura({ marca: nome, marcaHref: base, ativo: view, logo: ic && ic.i192, tabs: [
       { id: "inicio", txt: "Início", href: base }, { id: "agendar", txt: "Agendar", href: base + "/agendar" },
       { id: "meus", txt: "Meus", href: base + "/meus" }, { id: "info", txt: "Info", href: base + "/info" }] });
     U.rodapeHTML(`<a href="/painel" data-link class="link-painel">Área do barbeiro</a><small class="lukdev">Agenda por <a href="/" data-link>${esc(P.nome)}</a></small>`);
@@ -66,7 +67,7 @@
         ${lib ? `<a class="btn btn-grande" href="/${esc(b.slug)}/agendar" data-link>Agendar horário</a><p class="proximo" id="proximoLivre"></p>`
               : `<p class="proximo">Agendamento online pausado no momento.</p>${cfg.whatsapp ? `<a class="btn btn-ok" target="_blank" rel="noopener" href="${esc(wa(cfg.whatsapp, "Olá! Quero agendar um horário."))}">Agendar pelo WhatsApp</a>` : ""}`}
       </div>
-      <svg class="poste" viewBox="0 0 120 300" aria-hidden="true"><use href="#posteGrande"/></svg></div>
+      ${U.iconesDe(b.id, cfg.logo) ? `<img class="hero-logo" src="${esc(U.iconesDe(b.id, cfg.logo).i512)}" alt="Logo da ${esc(b.nome)}" width="160" height="160">` : `<svg class="poste" viewBox="0 0 120 300" aria-hidden="true"><use href="#posteGrande"/></svg>`}</div>
     ${profs.length > 1 ? `<div class="band"><h2>Equipe</h2><div class="equipe-pub">${profs.map(p => `<div><span class="avatar">${esc(U.iniciais(p.nome))}</span>${esc(p.nome)}</div>`).join("")}</div></div>` : ""}
     <div class="band"><h2>Serviços</h2><ul class="servicos">${cfg.servicos.map(s => `<li><b>${esc(s.nome)}</b><span class="preco">${money(s.preco)}</span><small>${esc(durTxt(s.dur))}${s.desc ? " · " + esc(s.desc) : ""}</small></li>`).join("")}</ul></div>
     <div class="band band-escura"><h2>Horário de funcionamento</h2>

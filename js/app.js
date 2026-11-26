@@ -33,7 +33,7 @@
   }
   function ics(ag, nomeLocal, endereco) {
     const d = ag.data.replace(/-/g, ""), h = ag.hora.replace(":", "") + "00", f = A.toHM(A.toMin(ag.hora) + ag.dur).replace(":", "") + "00";
-    baixar("agendamento.ics", ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//AgendaBarber//PT", "BEGIN:VEVENT", "UID:" + ag.id,
+    baixar("agendamento.ics", ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//LKBarber//PT", "BEGIN:VEVENT", "UID:" + ag.id,
       "DTSTART:" + d + "T" + h, "DTEND:" + d + "T" + f, "SUMMARY:" + ag.servico + " - " + nomeLocal, "LOCATION:" + (endereco || ""),
       "BEGIN:VALARM", "TRIGGER:-PT1H", "ACTION:DISPLAY", "DESCRIPTION:Lembrete", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n"), "text/calendar");
   }
@@ -51,8 +51,8 @@
     cli: '<path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8"/>',
     mais: '<path d="M4 6h16M4 12h16M4 18h16"/>'
   };
-  function moldura({ marca, marcaHref = "/", acoes = "", tabs = null, ativo = "", rodape = true }) {
-    $("#topo").innerHTML = `<a class="marca" href="${esc(marcaHref)}" data-link><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#poste"/></svg><span>${esc(marca)}</span></a>
+  function moldura({ marca, marcaHref = "/", acoes = "", tabs = null, ativo = "", rodape = true, logo = null }) {
+    $("#topo").innerHTML = `<a class="marca" href="${esc(marcaHref)}" data-link>${logo ? `<img src="${esc(logo)}" alt="" width="30" height="30">` : `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#poste"/></svg>`}<span>${esc(marca)}</span></a>
       <div class="topo-acoes"><button id="btnInstalar" class="btn-inst" ${promptInst ? "" : "hidden"}>Instalar app</button>${acoes}</div>`;
     $("#btnInstalar").onclick = instalar;
     const tb = $("#tabbar");
@@ -97,6 +97,7 @@
     const p = partes(), r = p[0] || "";
     document.body.dataset.area = r === "painel" ? "painel" : r === "admin" ? "admin" : !r || r === "cadastro" ? "site" : "cliente";
     if (window.Painel) window.Painel.parar && window.Painel.parar();
+    if (!window.Store.configurado) return naoConfigurado();
     if (!r) {
       if (standalone()) { // app instalado abre direto onde a pessoa usa
         if (window.Store.logado() && ls.get("bb_ultimo_painel", false)) return go("/painel", true);
@@ -110,6 +111,21 @@
     return window.Cliente.render(r.toLowerCase(), p[1] || "inicio");
   }
 
+  function naoConfigurado() {
+    moldura({ marca: P.nome }); rodapeHTML("");
+    $("#app").innerHTML = `<div class="form-pag"><h1>Quase lá</h1><p>O ${esc(P.nome)} ainda não está conectado ao banco de dados.</p>
+      <p class="sub">Preencha <code>SUPABASE_URL</code> e <code>SUPABASE_PUBLISHABLE_KEY</code> em <code>js/config.js</code>. O passo a passo está no LEIAME.md.</p></div>`;
+  }
+  const iconesDe = (bid, logo) => logo && logo.v && window.Store.logoURL
+    ? { i192: window.Store.logoURL(bid, logo, "icon-192.png"), i512: window.Store.logoURL(bid, logo, "icon-512.png"), mask: window.Store.logoURL(bid, logo, "maskable-512.png") } : null;
+  // planos vêm do banco (cache de 5 min)
+  let planosCache = null;
+  async function planos(forcar) {
+    if (!forcar && planosCache && Date.now() - planosCache.t < 300000) return planosCache.l;
+    try { const l = await window.Store.planos(); planosCache = { t: Date.now(), l }; ls.set("lk_planos", l); return l; }
+    catch (e) { const c = ls.get("lk_planos", null); if (c) return c; throw e; }
+  }
+
   // ---------- PWA ----------
   const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   let promptInst = null;
@@ -118,20 +134,28 @@
   addEventListener("appinstalled", () => { const b = $("#btnInstalar"); if (b) b.hidden = true; toast("App instalado!"); });
   // manifest próprio por barbearia: o app instalado abre direto nela, com o nome dela
   let manifestURL = null;
-  function manifestPara(nome, startPath) {
+  // icones: { i192, i512, mask } (ícone enviado pela barbearia) ou nada (ícone do LKBarber)
+  function manifestPara(nome, startPath, icones) {
     const o = location.origin + BASE.slice(0, -1), m = { name: nome, short_name: nome.slice(0, 24), start_url: o + startPath, scope: o + "/", id: o + startPath,
       display: "standalone", orientation: "portrait", background_color: "#16181d", theme_color: "#16181d", lang: "pt-BR",
-      icons: [{ src: o + "/icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: o + "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+      icons: icones ? [{ src: icones.i192, sizes: "192x192", type: "image/png" }, { src: icones.i512, sizes: "512x512", type: "image/png" },
+        { src: icones.mask, sizes: "512x512", type: "image/png", purpose: "maskable" }]
+      : [{ src: o + "/icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: o + "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
         { src: o + "/icons/maskable-512.png", sizes: "512x512", type: "image/png", purpose: "maskable" }] };
+    $("link[rel=icon]").href = icones ? icones.i192 : url("/icons/icon-192.png");
+    $("link[rel=apple-touch-icon]").href = icones ? icones.i192 : url("/icons/apple-touch-icon.png");
     if (manifestURL) URL.revokeObjectURL(manifestURL);
     manifestURL = URL.createObjectURL(new Blob([JSON.stringify(m)], { type: "application/manifest+json" }));
     $("link[rel=manifest]").href = manifestURL;
     $("meta[name=apple-mobile-web-app-title]").content = nome;
   }
-  function manifestPadrao() { $("link[rel=manifest]").href = url("/manifest.webmanifest"); $("meta[name=apple-mobile-web-app-title]").content = P.nome; }
+  function manifestPadrao() {
+    $("link[rel=manifest]").href = url("/manifest.webmanifest"); $("meta[name=apple-mobile-web-app-title]").content = P.nome;
+    $("link[rel=icon]").href = url("/icons/icon-192.png"); $("link[rel=apple-touch-icon]").href = url("/icons/apple-touch-icon.png");
+  }
   if ("serviceWorker" in navigator) { try { navigator.serviceWorker.register(url("/sw.js")).catch(() => {}); } catch {} }
 
   window.UI = { $, esc, money, DIAS, ls, fmtData, cap, durTxt, soDig, wa, slugify, hoje, iniciais, toast, modal, fecharModal, baixar, ics, copiar,
-    moldura, rodapeHTML, go, rota, partes, url, abs, BASE, standalone, manifestPara, manifestPadrao, ICON };
+    moldura, rodapeHTML, go, rota, partes, url, abs, BASE, standalone, manifestPara, manifestPadrao, ICON, planos, iconesDe };
   addEventListener("DOMContentLoaded", rota);
 }

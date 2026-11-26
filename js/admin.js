@@ -3,7 +3,9 @@
   const U = window.UI, S = window.Store, A = window.Agenda, P = window.PLATAFORMA;
   const { esc, money, $, fmtData } = U;
   const app = () => $("#app");
-  const ROT = { teste: "Teste", ativa: "Ativa", bloqueada: "Bloqueada", teste_vencido: "Teste vencido", vencida: "Vencida" };
+  const ROT = { teste: "Teste", ativa: "Ativa", carencia: "Pagamento pendente", bloqueada: "Bloqueada", teste_vencido: "Teste vencido", vencida: "Vencida" };
+  const FORMA = { CREDIT_CARD: "cartão", PIX: "Pix", BOLETO: "boleto" };
+  let planos = [];
   let filtro = "todas", busca = "";
 
   async function render() {
@@ -12,7 +14,7 @@
     U.rodapeHTML(`<span>${esc(P.nome)} · Admin</span>`);
     const sb = $("#admSair"); if (sb) sb.onclick = () => { S.sair(); U.go("/admin"); };
     if (!S.logado()) {
-      app().innerHTML = `<form class="form-pag" id="fA"><h1>Administração</h1>${S.modo === "local" ? `<p class="aviso">Demonstração: <b>admin@demo.com</b> / <b>1234</b></p>` : ""}
+      app().innerHTML = `<form class="form-pag" id="fA"><h1>Administração</h1>
         <label class="lbl">E-mail<input name="email" type="email" autocomplete="username" required></label>
         <label class="lbl">Senha<input name="senha" type="password" autocomplete="current-password" required></label>
         <p class="erro" id="aErro"></p><button class="btn btn-grande" style="width:100%">Entrar</button></form>`;
@@ -22,21 +24,22 @@
     if (!(await S.souSuper().catch(() => false))) {
       app().innerHTML = `<div class="form-pag"><h1>Sem permissão</h1><p>Esta área é só para o administrador da plataforma.</p><a class="btn" href="/painel" data-link>Ir para o painel</a></div>`; return;
     }
-    app().innerHTML = `<div class="p-top"><h1>Barbearias</h1></div><div class="p-sec"><div id="adKpis" class="kpis"></div>
+    app().innerHTML = `<div class="p-top"><h1>Barbearias</h1><button class="btn btn-mini btn-sec" id="adPlanos">Preços dos planos</button></div><div class="p-sec"><div id="adKpis" class="kpis"></div>
       <input class="busca" id="adBusca" type="search" placeholder="Buscar por nome, endereço ou e-mail" value="${esc(busca)}">
       <div class="seg" id="adFiltro"></div><div id="adLista"><p class="vazio">Carregando…</p></div></div>`;
+    $("#adPlanos").onclick = editarPlanos;
     $("#adBusca").oninput = e => { busca = e.target.value.trim().toLowerCase(); lista(); };
     await carregar();
   }
 
   let todas = [];
   async function carregar() {
-    try { todas = await S.todas(); } catch (e) { $("#adLista").innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
+    try { [todas, planos] = await Promise.all([S.todas(), U.planos(true)]); } catch (e) { $("#adLista").innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
     const h = U.hoje(), ef = b => A.statusEfetivo(b, h);
     const n = k => todas.filter(b => ef(b) === k).length;
-    const mrr = todas.filter(b => ef(b) === "ativa").reduce((s, b) => s + ((P.planos.find(p => p.id === b.plano) || {}).preco || 0), 0);
+    const mrr = todas.filter(b => b.assinatura && ["ativa", "carencia"].includes(ef(b))).reduce((s, b) => s + ((planos.find(p => p.id === b.plano) || {}).preco || 0), 0);
     const vence7 = todas.filter(b => b.vence_em && b.vence_em >= h && b.vence_em <= A.addDays(h, 7) && b.status !== "bloqueada").length;
-    $("#adKpis").innerHTML = `<div class="kpi"><small>Receita mensal (ativas)</small><b>${money(mrr)}</b></div>
+    $("#adKpis").innerHTML = `<div class="kpi"><small>Receita mensal (assinaturas)</small><b>${money(mrr)}</b></div>
       <div class="kpi"><small>Ativas</small><b>${n("ativa")}</b></div><div class="kpi"><small>Em teste</small><b>${n("teste")}</b></div>
       <div class="kpi"><small>Vencem em 7 dias</small><b>${vence7}</b></div><div class="kpi"><small>Bloqueadas / vencidas</small><b>${n("bloqueada") + n("teste_vencido") + n("vencida")}</b></div>`;
     const F = { todas: "Todas", ativa: "Ativas", teste: "Em teste", atencao: "Vencidas", bloqueada: "Bloqueadas" };
@@ -60,8 +63,8 @@
         <div class="adm-top"><div><b>${esc(b.nome)}</b><small><a href="/${esc(b.slug)}" data-link>/${esc(b.slug)}</a> · ${esc(b.dono_email || "—")}</small></div>
           <span class="tag ${A.liberada(b, h) ? (e === "ativa" ? "concluido" : "agendado") : "cancelado"}">${esc(ROT[e] || e)}</span></div>
         <p class="sub">${b.vence_em ? (dias >= 0 ? `Vence ${esc(fmtData(b.vence_em))} (${dias} dia${dias === 1 ? "" : "s"})` : `Venceu ${esc(fmtData(b.vence_em))}`) : "Sem vencimento"} ·
-          ${b.n_profs} barbeiro(s) · ${b.n_ags_30} agend. em 30 dias · desde ${esc(fmtData(String(b.criado_em).slice(0, 10)))}</p>
-        <div class="acoes"><select data-a="plano" aria-label="Plano">${P.planos.map(p => `<option value="${p.id}" ${p.id === b.plano ? "selected" : ""}>${esc(p.nome)} · ${money(p.preco)}</option>`).join("")}</select>
+          ${b.assinatura ? `Assinatura no ${FORMA[b.forma_pagamento] || "Asaas"}${b.ultimo_pagamento_em ? " · pagou " + esc(fmtData(String(b.ultimo_pagamento_em).slice(0, 10))) : " · sem pagamento ainda"}` : "Sem assinatura"} · ${b.n_profs} barbeiro(s) · ${b.n_ags_30} agend. em 30 dias · desde ${esc(fmtData(String(b.criado_em).slice(0, 10)))}</p>
+        <div class="acoes"><select data-a="plano" aria-label="Plano">${planos.map(p => `<option value="${p.id}" ${p.id === b.plano ? "selected" : ""}>${esc(p.nome)} · ${money(p.preco)}</option>`).join("")}</select>
           <button class="btn btn-mini btn-ok" data-a="ativar">Ativar +30 dias</button>
           ${b.status === "teste" ? `<button class="btn btn-mini btn-sec" data-a="teste">Teste +7 dias</button>` : ""}
           ${b.status === "bloqueada" ? `<button class="btn btn-mini btn-sec" data-a="desbloquear">Desbloquear</button>` : `<button class="btn btn-mini btn-sec" data-a="bloquear">Bloquear</button>`}</div></div>`;
@@ -81,6 +84,27 @@
     };
   }
   async function acao(id, patch, msg) { try { await S.atualizarAssinatura(id, patch); U.toast(msg); carregar(); } catch (e) { U.toast(e.message); } }
+
+  // preços e limites dos planos (tabela "planos"); vale para novas assinaturas e trocas de plano
+  function editarPlanos() {
+    const m = U.modal(`<h2>Planos</h2><p class="sub" style="margin-top:-6px">O novo preço vale para quem assinar ou trocar de plano a partir de agora. Assinaturas atuais mantêm o valor.</p>
+      <form id="fPl">${planos.map(p => `<div class="serv-ed form-grid" data-id="${esc(p.id)}">
+        <label class="full">Nome<input name="nome" value="${esc(p.nome)}" maxlength="30" required></label>
+        <label>Preço/mês (R$)<input name="preco" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(p.preco)}" required></label>
+        <label>Máx. barbeiros<input name="max" type="number" inputmode="numeric" min="1" step="1" value="${esc(p.max_prof ?? "")}" placeholder="ilimitado"></label>
+        <label class="full">Descrição<input name="desc" value="${esc(p.descricao || "")}" maxlength="90"></label></div>`).join("")}
+      <p class="erro" id="plErro"></p><div class="pilha"><button class="btn">Salvar planos</button><button type="button" class="btn btn-sec" data-fechar>Cancelar</button></div></form>`);
+    m.querySelector("#fPl").onsubmit = async e => {
+      e.preventDefault();
+      try {
+        for (const el of m.querySelectorAll("[data-id]")) {
+          const v = n => el.querySelector(`[name=${n}]`).value;
+          await S.salvarPlano({ id: el.dataset.id, nome: v("nome").trim(), preco: Number(v("preco")), max_prof: v("max") ? Number(v("max")) : null, descricao: v("desc").trim(), ativo: true });
+        }
+        U.fecharModal(); U.toast("Planos salvos."); carregar();
+      } catch (er) { m.querySelector("#plErro").textContent = er.message; }
+    };
+  }
 
   window.Admin = { render };
 }
