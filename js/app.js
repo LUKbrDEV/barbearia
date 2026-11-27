@@ -140,7 +140,7 @@
   // icones: { i192, i512, mask } (ícone enviado pela barbearia) ou nada (ícone do LKBarber)
   function manifestPara(nome, startPath, icones) {
     const o = location.origin + BASE.slice(0, -1), m = { name: nome, short_name: nome.slice(0, 24), start_url: o + startPath, scope: o + "/", id: o + startPath,
-      display: "standalone", orientation: "portrait", background_color: "#141210", theme_color: "#141210", lang: "pt-BR",
+      display: "standalone", orientation: "portrait", background_color: "#f3f3f3", theme_color: "#f3f3f3", lang: "pt-BR",
       icons: icones ? [{ src: icones.i192, sizes: "192x192", type: "image/png" }, { src: icones.i512, sizes: "512x512", type: "image/png" },
         { src: icones.mask, sizes: "512x512", type: "image/png", purpose: "maskable" }]
       : [{ src: o + "/icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: o + "/icons/icon-512.png", sizes: "512x512", type: "image/png" },

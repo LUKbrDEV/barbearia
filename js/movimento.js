@@ -45,9 +45,9 @@
       for (const b of bolhas) {
         const a = Math.min(1, b.vida * 1.5) * .9, y = b.y + (1 - b.vida) * 8, r = b.r * (.75 + .25 * b.vida);
         const g = cx.createRadialGradient(b.x - r * .35, y - r * .35, r * .1, b.x, y, r);
-        g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(.75, `rgba(241,234,220,${a * .7})`); g.addColorStop(1, "rgba(241,234,220,0)");
+        g.addColorStop(0, `rgba(255,255,255,${a})`); g.addColorStop(.7, `rgba(250,250,250,${a * .85})`); g.addColorStop(1, `rgba(200,200,205,${a * .5})`);
         cx.fillStyle = g; cx.beginPath(); cx.arc(b.x, y, r, 0, 7); cx.fill();
-        cx.strokeStyle = `rgba(255,255,255,${a * .35})`; cx.lineWidth = .8; cx.stroke();
+        cx.strokeStyle = `rgba(0,0,0,${a * .12})`; cx.lineWidth = .8; cx.stroke();
       }
       raf = bolhas.length ? requestAnimationFrame(desenhar) : 0;
     }
@@ -80,9 +80,8 @@
       // abertura: o texto sobe em sequência e o celular chega inclinado
       gsap.from(".l-hero h1, .l-hero .l-sub, .l-hero .l-ctas, .l-hero .l-mini", { ...entra, y: 26, stagger: 0.08 });
       gsap.from(".l-hero .celular", { ...entra, y: 70, rotate: 5, duration: 1, delay: 0.15 });
-      // o piso xadrez do topo desliza e o celular sobe devagar enquanto rola
+      // o celular do topo sobe devagar enquanto rola
       const topo = { trigger: ".l-hero", start: "top top", end: "bottom top", scrub: true };
-      gsap.to(".l-hero", { "--xadrez-x": "176px", ease: "none", scrollTrigger: topo });
       gsap.to(".l-hero .celular", { yPercent: -14, rotate: -2, ease: "none", scrollTrigger: { ...topo } });
       // títulos de seção
       gsap.utils.toArray("#landing .band > h2").forEach(h => gsap.from(h, { ...entra, y: 30, scrollTrigger: { trigger: h, start: "top 86%" } }));
