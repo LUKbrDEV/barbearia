@@ -42,9 +42,9 @@
       if (!acessos.length) return semAcesso(sup);
       let a = acessos.find(x => x.barbearia_id === ls.get("bb_bid", "")) || acessos[0];
       ls.set("bb_bid", a.barbearia_id); ls.set("bb_ultimo_painel", true);
-      const [b, profs] = await Promise.all([S.barbearia(a.barbearia_id), S.profs(a.barbearia_id)]);
+      const [b, profs, produtos] = await Promise.all([S.barbearia(a.barbearia_id), S.profs(a.barbearia_id), S.produtos(a.barbearia_id).catch(() => [])]);
       if (!ctx || ctx.bid !== a.barbearia_id) { aba = "agenda"; filtroProf = ""; conhecidos = null; }
-      ctx = { bid: a.barbearia_id, papel: a.papel, prof_id: a.prof_id, b, profs, acessos, sup };
+      ctx = { bid: a.barbearia_id, papel: a.papel, prof_id: a.prof_id, b, profs, produtos, acessos, sup };
       desenhar();
     } catch (e) { app().innerHTML = `<div class="form-pag"><p class="erro">${esc(e.message)}</p><button class="btn" id="tentar">Tentar de novo</button></div>`; $("#tentar").onclick = render; }
   }
@@ -103,7 +103,7 @@
     const tabs = dono()
       ? [{ id: "agenda", txt: "Agenda" }, { id: "bloq", txt: "Bloqueios" }, { id: "rel", txt: "Relatórios" }, { id: "cli", txt: "Clientes" }, { id: "mais", txt: "Mais" }]
       : [{ id: "agenda", txt: "Agenda" }, { id: "bloq", txt: "Folgas" }, { id: "rel", txt: "Ganhos" }, { id: "cli", txt: "Clientes" }, { id: "mais", txt: "Mais" }];
-    const extras = ["equipe", "serv", "hor", "assin", "aj"];
+    const extras = ["equipe", "serv", "prod", "hor", "assin", "aj"];
     const ic = U.iconesDe(ctx.bid, cfg().logo);
     U.moldura({ marca: ctx.b.nome, marcaHref: "/painel", tabs, ativo: extras.includes(aba) ? "mais" : aba, logo: ic && ic.i192,
       acoes: `<a class="btn btn-mini btn-claro" href="/${esc(ctx.b.slug)}" data-link>Ver página</a>` });
@@ -118,20 +118,20 @@
       const dias = Math.round((A.parseYMD(ctx.b.vence_em) - A.parseYMD(U.hoje())) / 864e5);
       if (dias <= 7) aviso = `<div class="aviso">Teste grátis: ${dias === 0 ? "termina hoje" : dias === 1 ? "falta 1 dia" : `faltam ${dias} dias`}. <button class="lnk" data-ir="assin">Assinar agora</button></div>`;
     }
-    const titulos = { agenda: "Agenda", bloq: dono() ? "Bloqueios e folgas" : "Minhas folgas", rel: dono() ? "Relatórios" : "Meus ganhos", cli: "Clientes",
+    const titulos = { agenda: "Agenda", bloq: dono() ? "Bloqueios e folgas" : "Minhas folgas", rel: dono() ? "Relatórios" : "Meus ganhos", cli: "Clientes", prod: "Produtos à venda",
       equipe: "Equipe", serv: "Serviços", hor: "Horários", assin: "Assinatura", aj: "Ajustes" };
     app().innerHTML = `<div class="p-top"><h1>${titulos[aba]}</h1>${!dono() ? `<span class="tag">Barbeiro · ${esc(nomeProf(ctx.prof_id))}</span>` : ""}</div>
       <div class="p-sec">${aviso}<div id="pc"></div></div>`;
     app().querySelectorAll("[data-ir]").forEach(b => b.onclick = () => { aba = b.dataset.ir; desenhar(); });
-    const fn = { agenda, bloq, rel, cli, equipe, serv, hor, assin, aj }[aba];
-    if ((["equipe", "serv", "hor", "assin", "aj"].includes(aba)) && !dono()) { aba = "agenda"; return desenhar(); }
+    const fn = { agenda, bloq, rel, cli, equipe, serv, prod, hor, assin, aj }[aba];
+    if ((["equipe", "serv", "prod", "hor", "assin", "aj"].includes(aba)) && !dono()) { aba = "agenda"; return desenhar(); }
     fn();
   }
   const box = () => $("#pc");
 
   function menuMais() {
     const it = dono()
-      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços e preços"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Ícone, dados, link e QR Code"]]
+      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços, preços e fotos"], ["prod", "Produtos à venda"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Ícone, dados, link e QR Code"]]
       : [];
     const b = U.modal(`<h2>${esc(ctx.b.nome)}</h2><p style="color:var(--mut);margin-top:-8px">${esc((S.usuario() || {}).email)} · ${dono() ? "Dono" : "Barbeiro"}</p>
       <div class="menu">${it.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}
@@ -155,47 +155,56 @@
   async function agenda() {
     box().innerHTML = `<div class="dia-nav"><button class="btn btn-sec" id="dAnt" aria-label="Dia anterior">‹</button>
       <input type="date" id="dSel" value="${dia}" aria-label="Data"><button class="btn btn-sec" id="dProx" aria-label="Próximo dia">›</button></div>
-      <div class="seg"><button class="btn btn-mini btn-sec" id="dHoje">Hoje</button><button class="btn btn-mini" id="dEnc">+ Encaixe</button></div>
+      <div class="seg"><button class="btn btn-mini btn-sec" id="dHoje">Hoje</button><button class="btn btn-mini" id="dEnc">+ Encaixe</button>${temProdutos() ? `<button class="btn btn-mini btn-sec" id="dVenda">+ Venda avulsa</button>` : ""}</div>
       ${dono() && ctx.profs.filter(p => p.ativo).length > 1 ? `<div class="seg chips-filtro" id="fProf">${[{ id: "", nome: "Todos" }].concat(ctx.profs.filter(p => p.ativo)).map(p => `<button class="chip ${filtroProf === p.id ? "on" : ""}" data-p="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>` : ""}
       <div id="aKpis" class="kpis"></div><h2 id="aTit"></h2><div id="aLista"><p class="vazio">Carregando…</p></div>`;
     const ir = d => { dia = d; agenda(); };
     $("#dAnt").onclick = () => ir(A.addDays(dia, -1)); $("#dProx").onclick = () => ir(A.addDays(dia, 1));
     $("#dHoje").onclick = () => ir(U.hoje()); $("#dSel").onchange = e => e.target.value && ir(e.target.value);
     $("#dEnc").onclick = encaixe;
+    const dv = $("#dVenda"); if (dv) dv.onclick = () => vender(null);
     const fp = $("#fProf"); if (fp) fp.onclick = e => { const b = e.target.closest("[data-p]"); if (b) { filtroProf = b.dataset.p; agenda(); } };
     await listaDia();
     timer = setInterval(() => { if (!document.hidden && aba === "agenda" && U.partes()[0] === "painel") listaDia(true); }, 30000);
   }
   async function listaDia(silencioso) {
-    let ags, blq;
+    let ags, blq, vendas;
     const pf = dono() ? filtroProf : ctx.prof_id;
-    try { [ags, blq] = await Promise.all([S.listar(ctx.bid, dia, dia, pf || undefined), S.bloqueios(ctx.bid, dia)]); }
+    try { [ags, blq, vendas] = await Promise.all([S.listar(ctx.bid, dia, dia, pf || undefined), S.bloqueios(ctx.bid, dia), S.vendas(ctx.bid, dia, dia, pf || undefined).catch(() => [])]); }
     catch (e) { if (!silencioso && box()) box().querySelector("#aLista").innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
     if (!$("#aKpis")) return;
     novosAvisos(ags);
     blq = blq.filter(b => b.data === dia && (!pf || !b.prof_id || b.prof_id === pf));
     const ativos = ags.filter(a => a.status !== "cancelado");
     const fat = ags.filter(a => a.status === "concluido").reduce((s, a) => s + a.preco, 0), prev = ags.filter(a => a.status === "agendado").reduce((s, a) => s + a.preco, 0);
-    $("#aKpis").innerHTML = `<div class="kpi"><small>Atendimentos</small><b>${ativos.length}</b></div><div class="kpi"><small>Recebido</small><b>${money(fat)}</b></div><div class="kpi"><small>A receber</small><b>${money(prev)}</b></div>`;
+    const totProd = vendas.reduce((t, v) => t + v.preco * v.qtd, 0);
+    $("#aKpis").innerHTML = `<div class="kpi"><small>Atendimentos</small><b>${ativos.length}</b></div><div class="kpi"><small>Serviços recebidos</small><b>${money(fat)}</b></div>
+      <div class="kpi"><small>A receber</small><b>${money(prev)}</b></div>${totProd ? `<div class="kpi"><small>Produtos vendidos</small><b>${money(totProd)}</b></div>` : ""}`;
+    const linhaVendas = vs => vs.length ? `<div class="vendas-ag">${vs.map(v => `<span>${esc(v.produto_nome)}${v.qtd > 1 ? " ×" + v.qtd : ""} · ${money(v.preco * v.qtd)} <button class="lnk sutil" data-desfazer="${esc(v.id)}" aria-label="Desfazer venda de ${esc(v.produto_nome)}">desfazer</button></span>`).join("")}</div>` : "";
+    const avulsas = vendas.filter(v => !v.agendamento_id);
     $("#aTit").textContent = cap(fmtData(dia, true));
     const h = cfg().horarios[A.dow(dia)], mostraProf = dono() && !filtroProf && ctx.profs.length > 1;
     const itens = ags.map(a => ({ t: a.hora, tipo: "ag", a })).concat(blq.map(b => ({ t: b.ini || "00:00", tipo: "blq", b })));
     if (h && h.aberto && h.almocoIni) itens.push({ t: h.almocoIni, tipo: "alm" });
     itens.sort((x, y) => x.t.localeCompare(y.t));
     const lista = $("#aLista");
-    if (!itens.length) { lista.innerHTML = `<p class="vazio">${h && h.aberto ? "Nenhum agendamento neste dia." : "Barbearia fechada neste dia."}</p>`; return; }
+    if (!itens.length && !avulsas.length) { lista.innerHTML = `<p class="vazio">${h && h.aberto ? "Nenhum agendamento neste dia." : "Barbearia fechada neste dia."}</p>`; return; }
     lista.innerHTML = itens.map(i => {
       if (i.tipo === "alm") return `<div class="ag-item livre"><div class="h">${esc(h.almocoIni)}<small>até ${esc(h.almocoFim)}</small></div><div class="n">Pausa / almoço</div></div>`;
       if (i.tipo === "blq") return `<div class="ag-item livre"><div class="h">${i.b.ini ? esc(i.b.ini) : "Dia"}<small>${i.b.ini ? "até " + esc(i.b.fim) : "inteiro"}</small></div><div class="n">Bloqueado${i.b.prof_id ? " · " + esc(nomeProf(i.b.prof_id)) : ""}${i.b.motivo ? " · " + esc(i.b.motivo) : ""}</div></div>`;
       const a = i.a;
       return `<div class="ag-item st-${esc(a.status)}" data-id="${esc(a.id)}"><div class="h">${esc(a.hora)}<small>${esc(durTxt(a.dur))}</small></div>
         <div><b>${esc(a.nome)}</b> <span class="tag ${esc(a.status)}">${esc(ROT[a.status] || a.status)}</span><br>
-        <span class="sub">${esc(a.servico_nome)} · ${money(a.preco)}${mostraProf ? ` · <b>${esc(nomeProf(a.prof_id))}</b>` : ""}${a.origem === "encaixe" ? " · encaixe" : ""}</span></div>
+        <span class="sub">${esc(a.servico_nome)} · ${money(a.preco)}${mostraProf ? ` · <b>${esc(nomeProf(a.prof_id))}</b>` : ""}${a.origem === "encaixe" ? " · encaixe" : ""}</span>${linhaVendas(vendas.filter(v => v.agendamento_id === a.id))}</div>
         <div class="acoes">${a.status === "agendado" ? `<button class="btn btn-mini btn-ok" data-s="concluido">Concluir</button><button class="btn btn-mini btn-sec" data-s="faltou">Faltou</button><button class="btn btn-mini btn-sec" data-s="cancelado">Cancelar</button>`
           : `<button class="btn btn-mini btn-sec" data-s="agendado">Desfazer</button>`}
+          ${temProdutos() && !["cancelado", "faltou"].includes(a.status) ? `<button class="btn btn-mini btn-sec" data-venda="${esc(a.id)}">+ Produto</button>` : ""}
           ${a.telefone ? `<a class="btn btn-mini btn-sec" target="_blank" rel="noopener" href="${esc(wa(a.telefone, `Olá ${a.nome}! Confirmando seu horário na ${ctx.b.nome}: ${fmtData(a.data)} às ${a.hora}.`))}">WhatsApp</a>` : ""}</div></div>`;
-    }).join("");
+    }).join("") + (avulsas.length ? `<h3 class="tit-avulsas">Vendas avulsas</h3>${avulsas.map(v => `<div class="cli"><div><b>${esc(v.produto_nome)}${v.qtd > 1 ? " ×" + v.qtd : ""}</b><small>${money(v.preco * v.qtd)}${ctx.profs.length > 1 ? " · " + esc(nomeProf(v.prof_id)) : ""}</small></div><button class="btn btn-mini btn-sec" data-desfazer="${esc(v.id)}">Desfazer</button></div>`).join("")}` : "");
     lista.onclick = async e => {
+      const bv = e.target.closest("[data-venda]"); if (bv) return vender(bv.dataset.venda);
+      const bd = e.target.closest("[data-desfazer]");
+      if (bd) { try { await S.desfazerVenda(bd.dataset.desfazer); ctx.produtos = await S.produtos(ctx.bid).catch(() => ctx.produtos); U.toast("Venda desfeita."); listaDia(); } catch (err) { U.toast(err.message); } return; }
       const b = e.target.closest("[data-s]"); if (!b) return;
       try { await S.atualizar(ctx.bid, b.closest("[data-id]").dataset.id, { status: b.dataset.s }); U.toast("Atualizado."); listaDia(); } catch (err) { U.toast(err.message); }
     };
@@ -265,7 +274,9 @@
     box().innerHTML = `<div class="seg" id="rPer">${Object.entries(PER).map(([k, t]) => `<button class="btn btn-mini ${periodo === k ? "" : "btn-sec"}" data-p="${k}">${t}</button>`).join("")}</div><div id="rOut"><p class="vazio">Carregando…</p></div>`;
     $("#rPer").onclick = e => { const b = e.target.closest("[data-p]"); if (b) { periodo = b.dataset.p; rel(); } };
     const fim = U.hoje(), ini = periodo === "mes" ? fim.slice(0, 8) + "01" : A.addDays(fim, -(+periodo || 0));
-    let ags; try { ags = await S.listar(ctx.bid, ini, A.addDays(fim, 60), dono() ? undefined : ctx.prof_id); } catch (err) { $("#rOut").innerHTML = `<p class="erro">${esc(err.message)}</p>`; return; }
+    let ags, vendas; try { [ags, vendas] = await Promise.all([S.listar(ctx.bid, ini, A.addDays(fim, 60), dono() ? undefined : ctx.prof_id), S.vendas(ctx.bid, ini, fim, dono() ? undefined : ctx.prof_id).catch(() => [])]); }
+    catch (err) { $("#rOut").innerHTML = `<p class="erro">${esc(err.message)}</p>`; return; }
+    const totProd = vendas.reduce((t, v) => t + v.preco * v.qtd, 0), qtdProd = vendas.reduce((t, v) => t + v.qtd, 0);
     const noP = ags.filter(a => a.data <= fim || a.status !== "agendado"), fut = ags.filter(a => a.status === "agendado" && a.data >= fim);
     const conc = noP.filter(a => a.status === "concluido"), fat = conc.reduce((s, a) => s + a.preco, 0);
     const faltas = noP.filter(a => a.status === "faltou").length, canc = noP.filter(a => a.status === "cancelado").length, prev = fut.reduce((s, a) => s + a.preco, 0);
@@ -279,14 +290,19 @@
       ${!dono() && com ? `<div class="kpi destaque"><small>Sua comissão (${com}%)</small><b>${money(fat * com / 100)}</b></div>` : ""}
       <div class="kpi"><small>Atendimentos</small><b>${conc.length}</b></div><div class="kpi"><small>Ticket médio</small><b>${money(conc.length ? fat / conc.length : 0)}</b></div>
       <div class="kpi"><small>Faltas / cancel.</small><b>${faltas} / ${canc}</b></div><div class="kpi"><small>Agendado a receber</small><b>${money(prev)}</b></div>
-      <div class="kpi"><small>Horário de pico</small><b>${pico ? pico[0] : "—"}</b></div></div>`;
+      <div class="kpi"><small>Horário de pico</small><b>${pico ? pico[0] : "—"}</b></div>
+      ${totProd ? `<div class="kpi"><small>Produtos (${qtdProd} un.)</small><b>${money(totProd)}</b></div>` : ""}</div>`;
+    if (vendas.length) {
+      const pv = {}; vendas.forEach(v => { pv[v.produto_nome] = pv[v.produto_nome] || { n: 0, v: 0 }; pv[v.produto_nome].n += v.qtd; pv[v.produto_nome].v += v.preco * v.qtd; });
+      html += `<h2>Produtos mais vendidos</h2>${barras(Object.entries(pv).sort((x, y) => y[1].v - x[1].v), "#c98a12", s => money(s.v))}`;
+    }
     if (!conc.length) html += `<p class="vazio">Nenhum atendimento concluído no período. Use “Concluir” na agenda.</p>`;
     else {
       if (dono() && ctx.profs.length > 1) {
         const pp = agrupa(conc, a => a.prof_id);
-        html += `<h2>Por barbeiro</h2><div class="scroll"><table class="tab"><thead><tr><th>Barbeiro</th><th class="num">Atend.</th><th class="num">Faturou</th><th class="num">Comissão</th></tr></thead><tbody>${pp.map(([id, s]) => {
-          const p = ctx.profs.find(x => x.id === id) || { nome: "—", comissao: 0 };
-          return `<tr><td>${esc(p.nome)}</td><td class="num">${s.n}</td><td class="num">${money(s.v)}</td><td class="num">${p.comissao ? money(s.v * p.comissao / 100) + ` <small>(${Number(p.comissao)}%)</small>` : "—"}</td></tr>`; }).join("")}</tbody></table></div>`;
+        html += `<h2>Por barbeiro</h2><div class="scroll"><table class="tab"><thead><tr><th>Barbeiro</th><th class="num">Atend.</th><th class="num">Faturou</th><th class="num">Produtos</th><th class="num">Comissão</th></tr></thead><tbody>${pp.map(([id, s]) => {
+          const p = ctx.profs.find(x => x.id === id) || { nome: "—", comissao: 0 }, prodP = vendas.filter(v => v.prof_id === id).reduce((t, v) => t + v.preco * v.qtd, 0);
+          return `<tr><td>${esc(p.nome)}</td><td class="num">${s.n}</td><td class="num">${money(s.v)}</td><td class="num">${prodP ? money(prodP) : "—"}</td><td class="num">${p.comissao ? money(s.v * p.comissao / 100) + ` <small>(${Number(p.comissao)}%)</small>` : "—"}</td></tr>`; }).join("")}</tbody></table></div>`;
       }
       html += `<h2>Receita por serviço</h2>${barras(agrupa(conc, a => a.servico_nome), "", s => money(s.v))}
         <h2 style="margin-top:24px">Movimento por dia da semana</h2>${barras(porDia, "var(--azul)", s => s.n)}`;
@@ -374,7 +390,9 @@
   function serv() {
     let lista = JSON.parse(JSON.stringify(cfg().servicos));
     const desenharS = () => {
-      box().innerHTML = `<div id="sLista">${lista.map((s, i) => `<div class="serv-ed form-grid" data-i="${i}">
+      box().innerHTML = `<p class="sub" style="margin-top:0">A foto aparece pequena ao lado do serviço; o cliente toca para ver grande.</p><div id="sLista">${lista.map((s, i) => `<div class="serv-ed form-grid" data-i="${i}">
+        <div class="full foto-linha"><div class="miniatura">${s.foto && s.foto.v ? `<img src="${esc(S.fotoURL(ctx.bid, "serv-" + s.id + ".webp", s.foto.v))}" alt="" width="64" height="64">` : `<span aria-hidden="true">sem foto</span>`}</div>
+          <div class="seg" style="margin:0"><button class="btn btn-mini btn-sec" data-foto>${s.foto && s.foto.v ? "Trocar foto" : "Adicionar foto"}</button>${s.foto && s.foto.v ? `<button class="btn btn-mini btn-sec" data-semfoto>Tirar foto</button>` : ""}</div></div>
         <label class="full">Nome<input data-k="nome" value="${esc(s.nome)}" maxlength="40"></label>
         <label>Preço (R$)<input data-k="preco" type="number" inputmode="decimal" min="0" step="0.5" value="${esc(s.preco)}"></label>
         <label>Duração (min)<input data-k="dur" type="number" inputmode="numeric" min="5" step="5" value="${esc(s.dur)}"></label>
@@ -386,7 +404,19 @@
         const it = e.target.closest("[data-i]"); if (!it) return; const i = +it.dataset.i;
         if (e.target.dataset.m) { const j = i + Number(e.target.dataset.m); [lista[i], lista[j]] = [lista[j], lista[i]]; desenharS(); }
         if (e.target.hasAttribute("data-del")) { lista.splice(i, 1); desenharS(); }
+        if (e.target.hasAttribute("data-semfoto")) { lista[i].foto = null; fotoNoSalvo(lista[i].id, null); desenharS(); }
+        if (e.target.hasAttribute("data-foto")) escolherArquivo(async arq => {
+          const btn = e.target; btn.disabled = true; btn.textContent = "Enviando…";
+          try { const blob = await fotoQuadrada(arq, 480); await S.enviarLogo(ctx.bid, [{ nome: "serv-" + lista[i].id + ".webp", blob }]);
+            lista[i].foto = { v: Date.now() }; await fotoNoSalvo(lista[i].id, lista[i].foto); desenharS(); }
+          catch (er) { U.toast(er.message); btn.disabled = false; btn.textContent = "Adicionar foto"; }
+        });
       };
+      // a foto já vale para o serviço salvo (sem precisar tocar em Salvar); serviço novo ainda não salvo espera o Salvar
+      async function fotoNoSalvo(id, foto) {
+        const salvos = cfg().servicos; if (!salvos.some(x => x.id === id)) return U.toast("Foto pronta. Toque em Salvar serviços.");
+        await salvarCfg({ servicos: salvos.map(x => x.id === id ? Object.assign({}, x, { foto }) : x) });
+      }
       $("#sAdd").onclick = () => { lista.push({ id: "s" + Date.now().toString(36), nome: "Novo serviço", preco: 0, dur: 30, desc: "" }); desenharS(); };
       $("#sSalvar").onclick = () => {
         if (!lista.length) return U.toast("Mantenha ao menos um serviço.");
@@ -396,6 +426,95 @@
     };
     desenharS();
   }
+  // ---------- FOTOS (serviços e produtos) ----------
+  function escolherArquivo(cb) {
+    const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp";
+    inp.onchange = () => { const f = inp.files[0]; if (!f) return; if (f.size > 12 * 1024 * 1024) return U.toast("Imagem muito grande (máximo 12 MB)."); cb(f); };
+    inp.click();
+  }
+  // recorta o centro em quadrado e comprime (WebP ~30–60 KB); o celular não sobe a foto original pesada
+  async function fotoQuadrada(arq, tam) {
+    const img = await carregarImagem(arq), lado = Math.min(img.width, img.height);
+    const c = document.createElement("canvas"); c.width = c.height = tam; const g = c.getContext("2d"); g.imageSmoothingQuality = "high";
+    g.drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, tam, tam);
+    let b = await new Promise(ok => c.toBlob(ok, "image/webp", 0.8));
+    if (!b || b.type !== "image/webp") b = await new Promise(ok => c.toBlob(ok, "image/jpeg", 0.82));
+    return new Blob([b], { type: "image/webp" === b.type ? "image/webp" : "image/jpeg" });
+  }
+
+  // ---------- PRODUTOS (dono) ----------
+  const temProdutos = () => (ctx.produtos || []).some(p => p.ativo);
+  const fotoProd = p => p.foto_v ? S.fotoURL(ctx.bid, "prod-" + p.id + ".webp", p.foto_v) : null;
+  async function prod() {
+    try { ctx.produtos = await S.produtos(ctx.bid); } catch (e) { box().innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
+    const l = ctx.produtos;
+    box().innerHTML = `<p class="sub" style="margin-top:0">Os produtos ativos aparecem na sua página, numa vitrine compacta. O barbeiro registra a venda na agenda (“+ Produto”).</p>
+      <div id="pLista">${l.length ? l.map(p => `<div class="prod-card ${p.ativo ? "" : "inativo"}" data-id="${esc(p.id)}">
+        <div class="miniatura">${fotoProd(p) ? `<img src="${esc(fotoProd(p))}" alt="" width="56" height="56">` : `<span aria-hidden="true">sem foto</span>`}</div>
+        <div><b>${esc(p.nome)}</b><small>${money(p.preco)} · ${p.estoque == null ? "sem controle de estoque" : p.estoque === 0 ? "esgotado" : p.estoque + " em estoque"}${p.ativo ? "" : " · oculto"}</small></div>
+        <button class="btn btn-mini btn-sec" data-ed>Editar</button></div>`).join("") : `<p class="vazio">Nenhum produto ainda. Cadastre pomadas, óleos, bebidas…</p>`}</div>
+      <button class="btn" id="pNovo" style="margin-top:16px;width:100%">+ Novo produto</button>`;
+    $("#pNovo").onclick = () => editarProduto({ novo: true, id: crypto.randomUUID ? crypto.randomUUID() : null, nome: "", preco: 0, descricao: "", estoque: null, ativo: true, ordem: l.length });
+    $("#pLista").onclick = e => { const c = e.target.closest("[data-id]"); if (c && e.target.closest("[data-ed]")) editarProduto(Object.assign({}, l.find(x => x.id === c.dataset.id))); };
+  }
+  function editarProduto(p) {
+    if (!p.id) return U.toast("Atualize o navegador para cadastrar produtos.");
+    let novaFoto = null;
+    const m = U.modal(`<h2>${p.novo ? "Novo produto" : "Editar produto"}</h2><form id="fPr" class="form-grid">
+      <div class="full foto-linha"><div class="miniatura grande" id="prFotoPrev">${fotoProd(p) ? `<img src="${esc(fotoProd(p))}" alt="" width="88" height="88">` : `<span>sem foto</span>`}</div>
+        <button type="button" class="btn btn-mini btn-sec" id="prFoto">${fotoProd(p) ? "Trocar foto" : "Adicionar foto"}</button></div>
+      <label class="full">Nome<input name="nome" value="${esc(p.nome)}" maxlength="60" required placeholder="Ex.: Pomada modeladora"></label>
+      <label>Preço (R$)<input name="preco" type="number" inputmode="decimal" min="0" step="0.5" value="${esc(p.preco)}" required></label>
+      <label>Estoque<input name="estoque" type="number" inputmode="numeric" min="0" step="1" value="${p.estoque == null ? "" : esc(p.estoque)}" placeholder="não controlar"></label>
+      <label class="full">Descrição (opcional)<input name="descricao" value="${esc(p.descricao || "")}" maxlength="90" placeholder="Ex.: Efeito matte, 80 g"></label>
+      <label class="switch full"><input type="checkbox" name="ativo" ${p.ativo ? "checked" : ""}> Mostrar na página da barbearia</label>
+      <p class="erro full" id="prErro"></p>
+      <button class="btn full" id="prSalvar">Salvar produto</button>
+      ${p.novo ? "" : `<button type="button" class="btn btn-sec perigo-txt full" id="prExcluir">Excluir produto</button>`}
+      <button type="button" class="btn btn-sec full" data-fechar>Cancelar</button></form>`);
+    m.querySelector("#prFoto").onclick = () => escolherArquivo(async arq => {
+      try { novaFoto = await fotoQuadrada(arq, 480); m.querySelector("#prFotoPrev").innerHTML = `<img src="${URL.createObjectURL(novaFoto)}" alt="" width="88" height="88">`; }
+      catch (er) { U.toast(er.message); }
+    });
+    const ex = m.querySelector("#prExcluir");
+    if (ex) ex.onclick = async () => { if (ex.dataset.ok !== "1") { ex.dataset.ok = "1"; ex.textContent = "Toque de novo para excluir"; return; }
+      try { await S.removerProduto(ctx.bid, p.id); U.fecharModal(); U.toast("Produto excluído."); prod(); } catch (er) { m.querySelector("#prErro").textContent = er.message; } };
+    m.querySelector("#fPr").onsubmit = async e => {
+      e.preventDefault(); const f = e.target, btn = m.querySelector("#prSalvar"), err = m.querySelector("#prErro");
+      if (!f.nome.value.trim()) return err.textContent = "Digite o nome do produto.";
+      const est = f.estoque.value.trim() === "" ? null : Math.max(0, Math.floor(Number(f.estoque.value)));
+      btn.disabled = true; btn.textContent = "Salvando…";
+      try {
+        if (novaFoto) { await S.enviarLogo(ctx.bid, [{ nome: "prod-" + p.id + ".webp", blob: novaFoto }]); p.foto_v = Date.now(); }
+        await S.salvarProduto(ctx.bid, Object.assign(p, { nome: f.nome.value.trim(), preco: Number(f.preco.value) || 0, descricao: f.descricao.value.trim(), estoque: est, ativo: f.ativo.checked }));
+        U.fecharModal(); U.toast("Produto salvo."); prod();
+      } catch (er) { err.textContent = er.message; btn.disabled = false; btn.textContent = "Salvar produto"; }
+    };
+  }
+  // registrar venda (no atendimento ou avulsa)
+  function vender(agId) {
+    const l = (ctx.produtos || []).filter(p => p.ativo); if (!l.length) return U.toast("Cadastre produtos em Mais → Produtos à venda.");
+    let sel = (l.find(p => p.estoque !== 0) || {}).id, qtd = 1;
+    const profs = ctx.profs.filter(p => p.ativo), escolheProf = !agId && dono() && profs.length > 1;
+    const m = U.modal(`<h2>${agId ? "Produto no atendimento" : "Venda avulsa"}</h2><form id="fVd">
+      <div class="prod-sel">${l.map(p => `<label class="op ${p.estoque === 0 ? "ocupado" : ""}"><input type="radio" name="p" value="${esc(p.id)}" ${p.id === sel ? "checked" : ""} ${p.estoque === 0 ? "disabled" : ""}>
+        <span>${fotoProd(p) ? `<img src="${esc(fotoProd(p))}" alt="" width="44" height="44">` : `<i class="sem" aria-hidden="true"></i>`}<b>${esc(p.nome)}</b><small>${money(p.preco)}${p.estoque === 0 ? " · esgotado" : p.estoque != null ? " · " + p.estoque + " em estoque" : ""}</small></span></label>`).join("")}</div>
+      <div class="qtd-linha"><span class="lbl" style="margin:0">Quantidade</span><div class="qtd"><button type="button" class="btn btn-sec btn-mini" data-q="-1" aria-label="Menos">−</button><b id="vdQ">1</b><button type="button" class="btn btn-sec btn-mini" data-q="1" aria-label="Mais">+</button></div></div>
+      ${escolheProf ? `<label class="lbl">Vendido por<select name="prof">${profs.map(p => `<option value="${esc(p.id)}" ${p.id === (filtroProf || ctx.prof_id) ? "selected" : ""}>${esc(p.nome)}</option>`).join("")}</select></label>` : ""}
+      <p class="erro" id="vdErro"></p><button class="btn btn-grande" id="vdBtn" style="width:100%"></button>
+      <button type="button" class="btn btn-sec" data-fechar style="width:100%;margin-top:8px">Cancelar</button></form>`);
+    const rot = () => { const p = l.find(x => x.id === sel); m.querySelector("#vdQ").textContent = qtd; m.querySelector("#vdBtn").textContent = p ? `Registrar ${money(p.preco * qtd)}` : "Escolha um produto"; m.querySelector("#vdBtn").disabled = !p; };
+    rot();
+    m.querySelector(".prod-sel").onchange = e => { sel = e.target.value; qtd = 1; rot(); };
+    m.querySelector(".qtd").onclick = e => { const b = e.target.closest("[data-q]"); if (!b) return; const p = l.find(x => x.id === sel), max = p && p.estoque != null ? p.estoque : 99; qtd = Math.min(max, Math.max(1, qtd + Number(b.dataset.q))); rot(); };
+    m.querySelector("#fVd").onsubmit = async e => {
+      e.preventDefault(); const f = e.target;
+      try { await S.registrarVenda({ produto: sel, qtd, ag: agId, prof: f.prof ? f.prof.value : null });
+        ctx.produtos = await S.produtos(ctx.bid).catch(() => ctx.produtos); U.fecharModal(); U.toast("Venda registrada."); if (aba === "agenda") listaDia(); }
+      catch (er) { m.querySelector("#vdErro").textContent = er.message; }
+    };
+  }
+
   async function salvarCfg(patch, nome) {
     try { const c = Object.assign({}, cfg(), patch); await S.salvarBarbearia(ctx.bid, { config: c, nome }); ctx.b.config = c; if (nome) ctx.b.nome = nome; U.toast("Salvo!"); if (nome) desenhar(); }
     catch (err) { U.toast(err.message); }

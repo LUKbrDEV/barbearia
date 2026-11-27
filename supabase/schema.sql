@@ -466,3 +466,99 @@ grant all on all tables in schema public to service_role;
 -- funções auxiliares usadas dentro das regras de segurança
 grant execute on function is_super(), papel_em(uuid), meu_prof(uuid), hoje_br(), liberada(barbearias), e_servidor()
   to anon, authenticated, service_role;
+
+-- ============================================================
+-- PRODUTOS À VENDA E VENDAS (registradas pelo barbeiro)
+-- ============================================================
+create table if not exists produtos (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  nome text not null check (char_length(nome) between 1 and 60),
+  descricao text default '',
+  preco numeric(10,2) not null default 0 check (preco >= 0),
+  foto_v bigint,                                            -- versão da foto (logos/<barbearia>/prod-<id>.webp)
+  estoque int check (estoque is null or estoque >= 0),       -- null = não controla estoque
+  ativo boolean not null default true,
+  ordem int not null default 0,
+  criado_em timestamptz not null default now()
+);
+create index if not exists prod_idx on produtos (barbearia_id, ordem);
+
+create table if not exists vendas (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  prof_id uuid references profissionais on delete set null,
+  produto_id uuid references produtos on delete set null,
+  produto_nome text not null,
+  preco numeric(10,2) not null,                              -- preço unitário no momento da venda
+  qtd int not null default 1 check (qtd between 1 and 99),
+  agendamento_id uuid references agendamentos on delete set null,
+  data date not null default hoje_br(),
+  criado_em timestamptz not null default now()
+);
+create index if not exists vendas_idx on vendas (barbearia_id, data);
+
+alter table produtos enable row level security;
+alter table vendas enable row level security;
+drop policy if exists pr_sel on produtos; create policy pr_sel on produtos for select to authenticated using (is_super() or papel_em(barbearia_id) is not null);
+drop policy if exists pr_ins on produtos; create policy pr_ins on produtos for insert to authenticated with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists pr_upd on produtos; create policy pr_upd on produtos for update to authenticated using (papel_em(barbearia_id) = 'dono') with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists pr_del on produtos; create policy pr_del on produtos for delete to authenticated using (papel_em(barbearia_id) = 'dono');
+drop policy if exists vd_sel on vendas; create policy vd_sel on vendas for select to authenticated
+  using (is_super() or papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
+
+-- Registra a venda e baixa o estoque no mesmo passo (dois barbeiros não vendem o último item juntos).
+create or replace function registrar_venda(p_produto uuid, p_qtd int, p_ag uuid, p_prof uuid) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_p produtos; v_papel text; v_prof uuid; v_id uuid; v_ag agendamentos;
+begin
+  select * into v_p from produtos where id = p_produto;
+  if v_p.id is null then raise exception 'produto nao encontrado'; end if;
+  v_papel := papel_em(v_p.barbearia_id);
+  if v_papel is null then raise exception 'sem permissao'; end if;
+  if p_qtd is null or p_qtd < 1 or p_qtd > 99 then raise exception 'quantidade invalida'; end if;
+  v_prof := case when v_papel = 'dono' then coalesce(p_prof, meu_prof(v_p.barbearia_id)) else meu_prof(v_p.barbearia_id) end;
+  if p_ag is not null then
+    select * into v_ag from agendamentos where id = p_ag and barbearia_id = v_p.barbearia_id;
+    if v_ag.id is null or (v_papel = 'barbeiro' and v_ag.prof_id is distinct from v_prof) then raise exception 'atendimento invalido'; end if;
+    v_prof := coalesce(v_ag.prof_id, v_prof);
+  end if;
+  if v_p.estoque is not null then
+    update produtos set estoque = estoque - p_qtd where id = p_produto and estoque >= p_qtd returning id into v_id;
+    if v_id is null then raise exception 'sem estoque'; end if;
+  end if;
+  insert into vendas (barbearia_id, prof_id, produto_id, produto_nome, preco, qtd, agendamento_id, data)
+  values (v_p.barbearia_id, v_prof, v_p.id, v_p.nome, v_p.preco, p_qtd, p_ag, coalesce(v_ag.data, hoje_br()))
+  returning id into v_id;
+  return v_id;
+end $$;
+
+create or replace function desfazer_venda(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare v vendas;
+begin
+  select * into v from vendas where id = p_id;
+  if v.id is null then raise exception 'venda nao encontrada'; end if;
+  if not (papel_em(v.barbearia_id) = 'dono' or (papel_em(v.barbearia_id) = 'barbeiro' and v.prof_id = meu_prof(v.barbearia_id))) then
+    raise exception 'sem permissao'; end if;
+  update produtos set estoque = estoque + v.qtd where id = v.produto_id and estoque is not null;
+  delete from vendas where id = p_id;
+end $$;
+
+-- página pública: agora também devolve os produtos ativos (sem estoque exato, só se esgotou)
+create or replace function dados_publicos(p_slug text) returns json language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'b', json_build_object('id', b.id, 'slug', b.slug, 'nome', b.nome, 'status', b.status, 'vence_em', b.vence_em, 'config', b.config),
+    'profs', coalesce((select json_agg(json_build_object('id', p.id, 'nome', p.nome, 'dias', p.dias) order by p.ordem, p.nome)
+                       from profissionais p where p.barbearia_id = b.id and p.ativo), '[]'::json),
+    'produtos', coalesce((select json_agg(json_build_object('id', x.id, 'nome', x.nome, 'descricao', x.descricao, 'preco', x.preco,
+                       'foto_v', x.foto_v, 'esgotado', x.estoque is not null and x.estoque = 0) order by x.ordem, x.nome)
+                       from produtos x where x.barbearia_id = b.id and x.ativo), '[]'::json))
+  from barbearias b where b.slug = lower(p_slug) $$;
+
+grant select, insert, update, delete on produtos to authenticated;
+grant select on vendas to authenticated;
+grant all on produtos, vendas to service_role;
+revoke all on function registrar_venda(uuid, int, uuid, uuid), desfazer_venda(uuid) from public, anon;
+grant execute on function registrar_venda(uuid, int, uuid, uuid), desfazer_venda(uuid) to authenticated;
+grant execute on function dados_publicos(text) to anon, authenticated;

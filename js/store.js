@@ -36,6 +36,7 @@
   }
   const traduz = m => /ocupado/i.test(m) ? "Esse horário acabou de ser ocupado. Escolha outro."
     : /indisponivel/i.test(m) ? "Agenda indisponível no momento." : /limite_plano/i.test(m) ? "Seu plano não permite mais barbeiros ativos. Troque de plano em Assinatura."
+    : /sem estoque/i.test(m) ? "Sem estoque suficiente desse produto." : /atendimento invalido/i.test(m) ? "Esse atendimento não é seu."
     : /slug/i.test(m) ? "Esse endereço já está em uso." : /convite/i.test(m) ? "Convite inválido ou já usado."
     : /JWT|token/i.test(m) ? "Sessão expirada. Entre novamente." : /Failed to fetch|NetworkError/i.test(m) ? "Sem conexão com a internet." : m;
   async function sb(path, opt = {}) {
@@ -53,15 +54,17 @@
   const normAg = a => Object.assign({}, a, { hora: t5(a.hora), preco: Number(a.preco) });
   const normBl = b => Object.assign({}, b, { ini: t5(b.ini), fim: t5(b.fim) });
   const q = encodeURIComponent;
+  const fotoURL = (bid, arq, v) => v ? `${URL_}/storage/v1/object/public/logos/${bid}/${arq}?v=${v}` : null;
   const logoURL = (bid, logo, arq = "icon-512.png") => logo && logo.v ? `${URL_}/storage/v1/object/public/logos/${bid}/${arq}?v=${logo.v}` : null;
 
   window.Store = {
-    configurado: true, slugOk, logoURL,
+    configurado: true, slugOk, logoURL, fotoURL,
     // ---- público ----
     async planos() { return ((await sb("/rest/v1/planos?ativo=eq.true&order=ordem")) || []).map(p => Object.assign(p, { preco: Number(p.preco) })); },
     async publico(slug) {
       const r = await rpc("dados_publicos", { p_slug: slug }); if (!r) return null;
-      r.b.config = Object.assign({}, window.DEFAULT_CONFIG, r.b.config || {}); r.profs = r.profs || []; return r;
+      r.b.config = Object.assign({}, window.DEFAULT_CONFIG, r.b.config || {}); r.profs = r.profs || [];
+      r.produtos = (r.produtos || []).map(p => Object.assign(p, { preco: Number(p.preco) })); return r;
     },
     async ocupados(slug, de, ate) { return ((await rpc("horarios_ocupados", { p_slug: slug, p_de: de, p_ate: ate })) || []).map(x => ({ prof: x.prof, data: x.data, ini: t5(x.ini), fim: t5(x.fim) })); },
     async agendar(slug, r) { return await rpc("agendar", { p_slug: slug, p_servico: r.servico_id, p_prof: r.prof_id || null, p_nome: r.nome, p_tel: r.telefone || "", p_data: r.data, p_hora: r.hora }); },
@@ -124,6 +127,20 @@
           headers: { apikey: KEY, Authorization: "Bearer " + t, "Content-Type": a.blob.type || "image/png", "x-upsert": "true", "cache-control": "3600" } });
         if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.message || j.error || "Não foi possível enviar a imagem."); }
       }
+    },
+    // ---- produtos e vendas ----
+    async produtos(bid) { return ((await sb(`/rest/v1/produtos?barbearia_id=eq.${q(bid)}&order=ordem,nome`, { auth: true })) || []).map(p => Object.assign(p, { preco: Number(p.preco) })); },
+    async salvarProduto(bid, p) {
+      const body = { nome: p.nome, descricao: p.descricao || "", preco: p.preco, estoque: p.estoque, ativo: p.ativo, foto_v: p.foto_v || null, ordem: p.ordem || 0 };
+      if (p.novo) await sb("/rest/v1/produtos", { method: "POST", auth: true, body: Object.assign({ id: p.id, barbearia_id: bid }, body), headers: { Prefer: "return=minimal" } });
+      else await sb(`/rest/v1/produtos?id=eq.${q(p.id)}`, { method: "PATCH", auth: true, body });
+    },
+    async removerProduto(bid, id) { await sb(`/rest/v1/produtos?id=eq.${q(id)}`, { method: "DELETE", auth: true }); },
+    async registrarVenda({ produto, qtd, ag, prof }) { return await rpc("registrar_venda", { p_produto: produto, p_qtd: qtd || 1, p_ag: ag || null, p_prof: prof || null }, true); },
+    async desfazerVenda(id) { await rpc("desfazer_venda", { p_id: id }, true); },
+    async vendas(bid, de, ate, profId) {
+      return ((await sb(`/rest/v1/vendas?barbearia_id=eq.${q(bid)}&data=gte.${de}&data=lte.${ate}${profId ? "&prof_id=eq." + q(profId) : ""}&order=data,criado_em`, { auth: true })) || [])
+        .map(v => Object.assign(v, { preco: Number(v.preco) }));
     },
     async profs(bid) { return (await rpc("profissionais_da_barbearia", { p_bid: bid }, true)) || []; },
     async salvarProf(bid, p) {

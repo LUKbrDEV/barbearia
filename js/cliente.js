@@ -10,7 +10,7 @@
     if (atual && atual.slug === slug && Date.now() - atual.carregado < 60000) return atual;
     const d = await S.publico(slug);
     if (!d) return null;
-    atual = { slug, b: d.b, cfg: d.b.config, profs: d.profs, carregado: Date.now() };
+    atual = { slug, b: d.b, cfg: d.b.config, profs: d.profs, produtos: d.produtos || [], carregado: Date.now() };
     ls.set("bb_cache_" + slug, d);
     Object.assign(st, { serv: null, prof: "", dia: null, hora: null });
     return atual;
@@ -20,7 +20,7 @@
     if (!["inicio", "agendar", "meus", "info"].includes(view)) view = "inicio";
     let d;
     try { d = await carregar(slug); }
-    catch { const c = ls.get("bb_cache_" + slug, null); if (c) { atual = { slug, b: c.b, cfg: c.b.config, profs: c.profs, carregado: 0 }; d = atual; U.toast("Sem conexão: mostrando dados salvos."); } }
+    catch { const c = ls.get("bb_cache_" + slug, null); if (c) { atual = { slug, b: c.b, cfg: c.b.config, profs: c.profs, produtos: c.produtos || [], carregado: 0 }; d = atual; U.toast("Sem conexão: mostrando dados salvos."); } }
     if (!d) return naoEncontrada(slug);
     const base = "/" + slug, nome = d.b.nome;
     const ic = U.iconesDe(d.b.id, d.cfg.logo);
@@ -69,11 +69,15 @@
       </div>
       ${U.iconesDe(b.id, cfg.logo) ? `<img class="hero-logo" src="${esc(U.iconesDe(b.id, cfg.logo).i512)}" alt="Logo da ${esc(b.nome)}" width="160" height="160">` : `<svg class="poste" viewBox="0 0 120 300" aria-hidden="true"><use href="#posteGrande"/></svg>`}</div>
     ${profs.length > 1 ? `<div class="band"><h2>Equipe</h2><div class="equipe-pub">${profs.map(p => `<div><span class="avatar">${esc(U.iniciais(p.nome))}</span>${esc(p.nome)}</div>`).join("")}</div></div>` : ""}
-    <div class="band"><h2>Serviços</h2><ul class="servicos">${cfg.servicos.map(s => `<li><b>${esc(s.nome)}</b><span class="preco">${money(s.preco)}</span><small>${esc(durTxt(s.dur))}${s.desc ? " · " + esc(s.desc) : ""}</small></li>`).join("")}</ul></div>
+    <div class="band"><h2>Serviços</h2><ul class="servicos">${cfg.servicos.map(s => { const f = fotoServ(s);
+      return `<li class="${f ? "com-foto" : ""}">${f ? `<button class="mini-foto" data-zoom="${esc(f)}" data-tit="${esc(s.nome)}" aria-label="Ver foto de ${esc(s.nome)}"><img src="${esc(f)}" alt="" width="52" height="52" loading="lazy"></button>` : ""}<b>${esc(s.nome)}</b><span class="preco">${money(s.preco)}</span><small>${esc(durTxt(s.dur))}${s.desc ? " · " + esc(s.desc) : ""}</small></li>`; }).join("")}</ul></div>
+    ${vitrine()}
     <div class="band band-escura"><h2>Horário de funcionamento</h2>
       <ul class="horarios">${[1, 2, 3, 4, 5, 6, 0].map(i => { const h = cfg.horarios[i];
         return `<li class="${i === hj ? "hoje" : ""}"><span>${DIAS[i]}</span><span>${h && h.aberto ? esc(h.abre) + " – " + esc(h.fecha) : "Fechado"}</span></li>`; }).join("")}</ul>
       <div class="contato">${contatos(cfg)}</div></div>`;
+    ligarZoom(app());
+    const vt = $("#vitrine"); if (vt) { const passo = d => vt.scrollBy({ left: d * 170, behavior: "smooth" }); const a1 = $("#vtAnt"), a2 = $("#vtProx"); if (a1) { a1.onclick = () => passo(-1); a2.onclick = () => passo(1); } }
     if (!lib) return;
     try {
       const menor = Math.min(...cfg.servicos.map(s => s.dur)), h0 = U.hoje(), busy = await S.ocupados(b.slug, h0, A.addDays(h0, 7));
@@ -82,6 +86,28 @@
         if (r) { const el = $("#proximoLivre"); if (el) el.innerHTML = `Próximo horário livre: <b>${i === 0 ? "hoje" : i === 1 ? "amanhã" : esc(fmtData(d))} às ${r.hora}</b>`; break; }
       }
     } catch {}
+  }
+
+  // ---------- FOTOS E VITRINE ----------
+  const fotoServ = s => s.foto && s.foto.v ? S.fotoURL(atual.b.id, "serv-" + s.id + ".webp", s.foto.v) : null;
+  const fotoProd = p => p.foto_v ? S.fotoURL(atual.b.id, "prod-" + p.id + ".webp", p.foto_v) : null;
+  // toque na miniatura abre a foto grande (sem selecionar o serviço)
+  function ligarZoom(raiz) {
+    if (!raiz || raiz._zoom) return; raiz._zoom = true;   // um ouvinte só por elemento
+    raiz.addEventListener("click", e => {
+      const z = e.target.closest("[data-zoom]"); if (!z) return;
+      e.preventDefault(); e.stopPropagation();
+      U.modal(`<figure class="zoom"><img src="${esc(z.dataset.zoom)}" alt="${esc(z.dataset.tit || "")}"><figcaption>${esc(z.dataset.tit || "")}</figcaption></figure><button class="btn btn-sec" data-fechar style="width:100%">Fechar</button>`);
+    });
+  }
+  function vitrine() {
+    const l = atual.produtos || []; if (!l.length) return "";
+    const zap = atual.cfg.whatsapp;
+    return `<div class="band"><div class="vitrine-cab"><h2>Produtos</h2>${l.length > 2 ? `<div class="seg" style="margin:0"><button class="btn btn-mini btn-sec" id="vtAnt" aria-label="Anteriores">‹</button><button class="btn btn-mini btn-sec" id="vtProx" aria-label="Próximos">›</button></div>` : ""}</div>
+      <div class="vitrine" id="vitrine">${l.map(p => { const f = fotoProd(p);
+        return `<div class="vit-item ${p.esgotado ? "esgotado" : ""}">${f ? `<button class="vit-foto" data-zoom="${esc(f)}" data-tit="${esc(p.nome)}" aria-label="Ver foto de ${esc(p.nome)}"><img src="${esc(f)}" alt="" width="150" height="150" loading="lazy"></button>` : `<div class="vit-foto vazio-foto" aria-hidden="true"></div>`}
+          <b>${esc(p.nome)}</b>${p.descricao ? `<small>${esc(p.descricao)}</small>` : ""}<span class="preco">${money(p.preco)}</span>
+          ${p.esgotado ? `<span class="tag cancelado">Esgotado</span>` : zap ? `<a class="btn btn-mini btn-ok" target="_blank" rel="noopener" href="${esc(wa(zap, `Olá! Quero reservar: ${p.nome} (${money(p.preco)}). Retiro na barbearia.`))}">Reservar</a>` : `<small>Disponível na barbearia</small>`}</div>`; }).join("")}</div></div>`;
   }
 
   // ---------- AGENDAR ----------
@@ -102,7 +128,9 @@
     $("#inNome").value = ls.get("bb_nome", ""); if ($("#inTel")) $("#inTel").value = ls.get("bb_tel", "");
     if (st.serv && !cfg.servicos.some(s => s.id === st.serv)) st.serv = null;
     if (st.prof && !profs.some(p => p.id === st.prof)) st.prof = "";
-    $("#escServ").innerHTML = cfg.servicos.map(s => `<label class="op"><input type="radio" name="serv" value="${esc(s.id)}" ${st.serv === s.id ? "checked" : ""}><span><b>${esc(s.nome)}</b><small>${money(s.preco)} · ${esc(durTxt(s.dur))}</small></span></label>`).join("");
+    $("#escServ").innerHTML = cfg.servicos.map(s => { const f = fotoServ(s);
+      return `<label class="op ${f ? "op-foto" : ""}"><input type="radio" name="serv" value="${esc(s.id)}" ${st.serv === s.id ? "checked" : ""}><span>${f ? `<img src="${esc(f)}" alt="" width="40" height="40" loading="lazy" data-zoom="${esc(f)}" data-tit="${esc(s.nome)}" title="Toque para ampliar">` : ""}<b>${esc(s.nome)}</b><small>${money(s.preco)} · ${esc(durTxt(s.dur))}</small></span></label>`; }).join("");
+    ligarZoom($("#escServ"));
     if (varios) $("#escProf").innerHTML = [{ id: "", nome: "Qualquer um", sub: "mais horários" }].concat(profs).map(p =>
       `<label class="op"><input type="radio" name="prof" value="${esc(p.id)}" ${st.prof === p.id ? "checked" : ""}><span><span class="avatar">${p.id ? esc(U.iniciais(p.nome)) : "★"}</span><b>${esc(p.nome)}</b>${p.sub ? `<small>${p.sub}</small>` : ""}</span></label>`).join("");
     const h0 = U.hoje();
