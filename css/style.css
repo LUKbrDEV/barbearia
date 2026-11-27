@@ -605,3 +605,57 @@ legend b{background:var(--verm);color:var(--verm-tx);border-radius:999px}
 /* espuma de barbear que segue o mouse no topo (só computador) */
 .espuma{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .l-hero>*:not(.espuma){position:relative;z-index:1}
+
+/* =====================================================================
+   PERSONALIDADE: base Fluent + faixas "noite de barbearia" (café escuro com brilho de latão),
+   destaque em serifa itálica (Instrument Serif) e rótulos de seção.
+   ===================================================================== */
+:root{--f-serifa:"Instrument Serif","Iowan Old Style",Georgia,"Times New Roman",serif;
+  --noite:radial-gradient(70% 90% at 88% 0%,rgba(226,182,107,.26),transparent 60%),
+          radial-gradient(60% 80% at 0% 100%,rgba(176,96,46,.22),transparent 62%),#17130f}
+h1 em,h2 em{font-family:var(--f-serifa);font-style:italic;font-weight:400;letter-spacing:0;color:var(--verm);font-size:1.12em;line-height:1}
+.olho{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-family:var(--f-texto);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--verm)}
+.olho::before{content:"";width:22px;height:2px;border-radius:2px;background:currentColor}
+
+/* faixas escuras: topo, telas do app, três visões, horário de funcionamento, chamada final */
+.l-hero,.hero,.band-escura,.cta-final{
+  --ink:#f5efe6;--mut:#b9ae9e;--linha:rgba(255,255,255,.1);--borda:rgba(255,255,255,.1);--borda-forte:rgba(255,255,255,.3);
+  --cartao:rgba(255,255,255,.06);--camada:rgba(255,255,255,.04);--tinta:rgba(226,182,107,.16);
+  --verm:#e2b66b;--verm-tx:#1b1408;color:var(--ink);background:var(--noite);border-block:0}
+.l-hero h1{font-size:clamp(38px,6.4vw,66px);line-height:1.04}
+.l-hero h1 em{display:inline-block;font-size:1.1em}
+.l-hero .celular{box-shadow:0 40px 80px rgba(0,0,0,.55),0 0 0 1px rgba(255,255,255,.06);rotate:3deg}
+.btn-sec,.btn-vidro{backdrop-filter:blur(8px)}
+.cta-final h2{font-size:clamp(28px,5vw,44px)}
+
+/* cartões com mais caráter */
+.bf{position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
+.bf::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--verm);opacity:0;transition:opacity .2s}
+.bf:hover{transform:translateY(-3px);box-shadow:var(--s3)}.bf:hover::after{opacity:1}
+.bf svg{background:var(--verm);stroke:var(--verm-tx);border-radius:12px}
+.passos li::before{font-family:var(--f-serifa);font-style:italic;font-weight:400;font-size:44px;width:auto;height:auto;background:none;color:var(--verm);display:block;margin:0 0 2px;line-height:1}
+.depois{background:var(--noite);color:#f5efe6;border:0;box-shadow:var(--s3);--mut:#b9ae9e}
+.depois li::before{color:#e2b66b}
+.plano.destaque{background:var(--noite);color:#f5efe6;border:0;box-shadow:var(--s4);--mut:#b9ae9e;--verm:#e2b66b;--verm-tx:#1b1408;--cartao:rgba(255,255,255,.06);--borda:rgba(255,255,255,.12);--ink:#f5efe6}
+.plano.destaque .tag{background:#e2b66b;color:#1b1408}
+.preco-plano{font-family:var(--f-texto)}
+.kpi.destaque{background:var(--noite);color:#f5efe6}
+.equipe-pub .avatar{background:var(--noite);color:#e2b66b;box-shadow:0 0 0 3px var(--bg),0 0 0 4.5px var(--verm)}
+legend b{font-family:var(--f-serifa);font-style:italic;font-weight:400;font-size:17px}
+.faq summary::after{content:"+";margin-left:auto;font-size:22px;color:var(--verm);transition:rotate .2s}
+.faq[open] summary::after{rotate:45deg}
+.faq summary{gap:12px;list-style:none}.faq summary::-webkit-details-marker{display:none}
+
+/* capa da barbearia (foto de fundo no topo da página, com escurecimento escolhido pelo dono) */
+.hero.com-capa{background:#111 var(--capa) center/cover no-repeat;isolation:isolate;min-height:clamp(260px,46vw,380px)}
+.hero.com-capa::before{content:"";position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(180deg,rgba(0,0,0,calc(var(--capa-op,.55) * .7)),rgba(0,0,0,var(--capa-op,.55)) 70%)}
+.hero.com-capa h1,.hero.com-capa .slogan,.hero.com-capa .proximo{text-shadow:0 1px 12px rgba(0,0,0,.45)}
+.capa-prev{position:relative;aspect-ratio:16/8;border-radius:10px;overflow:hidden;background:var(--noite) center/cover no-repeat;display:flex;align-items:flex-end;padding:16px;color:#fff;box-shadow:var(--s2);border:1px solid var(--borda)}
+.capa-prev::before{content:"";position:absolute;inset:0;background:rgba(0,0,0,var(--capa-op,.55))}
+.capa-prev b{position:relative;font-family:var(--f-titulo);font-size:24px;font-weight:600;text-shadow:0 1px 10px rgba(0,0,0,.5)}
+.capa-prev small{position:absolute;top:12px;left:14px;font-size:12px;opacity:.85}
+.capa-op{display:flex;align-items:center;gap:12px;margin:12px 0 4px;font-weight:600;font-size:14px}
+.capa-op input{flex:1}.capa-op output{min-width:44px;text-align:right;font-variant-numeric:tabular-nums}
+@media(prefers-reduced-motion:reduce){.bf,.bf::after{transition:none}.bf:hover{transform:none}}
+input[type=range],input[type=range]:focus{border:0;box-shadow:none;background:none;min-height:32px;padding:0;accent-color:var(--verm)}

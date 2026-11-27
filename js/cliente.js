@@ -61,7 +61,9 @@
   }
   async function inicio() {
     const { cfg, b, profs } = atual, ab = abertoAgora(cfg), hj = new Date().getDay(), lib = A.liberada(b, U.hoje());
-    app().innerHTML = `<div class="hero">
+    const capa = cfg.capa && cfg.capa.v ? S.fotoURL(b.id, "capa.webp", cfg.capa.v) : null;
+    const opCapa = Math.min(0.9, Math.max(0, (cfg.capa && cfg.capa.escurecer != null ? cfg.capa.escurecer : 55) / 100));
+    app().innerHTML = `<div class="hero${capa ? " com-capa" : ""}"${capa ? ` style="--capa:url('${esc(capa)}');--capa-op:${opCapa}"` : ""}>
       <div class="hero-txt"><p class="aberto ${ab ? "on" : ""}">${ab ? "Aberto agora" : "Fechado agora"}</p>
         <h1>${esc(b.nome)}</h1><p class="slogan">${esc(cfg.slogan || "")}</p>
         ${lib ? `<a class="btn btn-grande" href="/${esc(b.slug)}/agendar" data-link>Agendar horário</a><p class="proximo" id="proximoLivre"></p>`

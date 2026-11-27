@@ -131,7 +131,7 @@
 
   function menuMais() {
     const it = dono()
-      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços, preços e fotos"], ["prod", "Produtos à venda"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Ícone, dados, link e QR Code"]]
+      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços, preços e fotos"], ["prod", "Produtos à venda"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Capa, ícone, dados, link e QR Code"]]
       : [];
     const b = U.modal(`<h2>${esc(ctx.b.nome)}</h2><p style="color:var(--mut);margin-top:-8px">${esc((S.usuario() || {}).email)} · ${dono() ? "Dono" : "Barbeiro"}</p>
       <div class="menu">${it.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}
@@ -442,6 +442,19 @@
     return new Blob([b], { type: "image/webp" === b.type ? "image/webp" : "image/jpeg" });
   }
 
+  // capa: lado maior até 1600px, mantém o formato da foto, WebP ~150–300 KB (limite do armazenamento: 1 MB)
+  async function fotoCapa(arq) {
+    const img = await carregarImagem(arq), k = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    const g = c.getContext("2d"); g.imageSmoothingQuality = "high"; g.drawImage(img, 0, 0, c.width, c.height);
+    for (const q of [0.78, 0.65, 0.5]) {
+      let b = await new Promise(ok => c.toBlob(ok, "image/webp", q));
+      if (!b || b.type !== "image/webp") b = await new Promise(ok => c.toBlob(ok, "image/jpeg", q));
+      if (b && b.size < 950 * 1024) return b;
+    }
+    throw new Error("A foto ficou grande demais. Tente outra imagem.");
+  }
+
   // ---------- PRODUTOS (dono) ----------
   const temProdutos = () => (ctx.produtos || []).some(p => p.ativo);
   const fotoProd = p => p.foto_v ? S.fotoURL(ctx.bid, "prod-" + p.id + ".webp", p.foto_v) : null;
@@ -709,7 +722,15 @@
   function aj() {
     const c = cfg(), link = U.abs("/" + ctx.b.slug);
     const ic = U.iconesDe(ctx.bid, c.logo);
-    box().innerHTML = `<h2>Ícone da barbearia</h2>
+    const capa = c.capa && c.capa.v ? S.fotoURL(ctx.bid, "capa.webp", c.capa.v) : null, esc0 = c.capa && c.capa.escurecer != null ? c.capa.escurecer : 55;
+    box().innerHTML = `<h2>Capa da página</h2>
+      <p class="sub" style="margin-top:0">Uma foto da sua barbearia no topo da página que o cliente abre. Fica atrás do nome, escurecida para o texto aparecer bem.</p>
+      <div class="capa-prev" id="capaPrev" style="${capa ? `background-image:url('${esc(capa)}');` : ""}--capa-op:${esc0 / 100}"><small id="capaAviso">${capa ? "Prévia" : "Sem capa: aparece o fundo padrão"}</small><b>${esc(ctx.b.nome)}</b></div>
+      <label class="capa-op">Escurecer<input type="range" id="capaOp" min="0" max="90" step="5" value="${esc0}" aria-label="Quanto escurecer a capa"><output id="capaOpV">${esc0}%</output></label>
+      <div class="seg" style="margin:8px 0 0"><button class="btn btn-mini" id="ajCapa">${capa ? "Trocar foto" : "Enviar foto"}</button>
+        <button class="btn btn-mini btn-sec" id="ajCapaSalvar" hidden>Salvar escurecimento</button>
+        ${capa ? `<button class="btn btn-mini btn-sec" id="ajSemCapa">Remover capa</button>` : ""}</div>
+      <h2 style="margin-top:28px">Ícone da barbearia</h2>
       <div class="icone-atual"><div class="ic-grande">${ic ? `<img src="${esc(ic.i192)}" alt="Ícone atual" width="88" height="88">` : `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#poste"/></svg>`}</div>
         <div><p class="sub" style="margin:0 0 10px">${ic ? "Este é o ícone do app instalado pelos seus clientes." : "Sem ícone próprio: os clientes veem o poste de barbeiro."} Use o logo em PNG ou JPG, de preferência quadrado.</p>
         <div class="seg" style="margin:0"><button class="btn btn-mini" id="ajIcone">${ic ? "Trocar ícone" : "Enviar ícone"}</button>${ic ? `<button class="btn btn-mini btn-sec" id="ajSemIcone">Remover</button>` : ""}</div></div></div>
@@ -730,6 +751,19 @@
       <button class="btn btn-sec" id="ajNotif">Ativar notificações</button>
       <h2 style="margin-top:28px">Backup</h2><button class="btn btn-sec" id="ajExp">Baixar agendamentos (CSV)</button>`;
     $("#ajIcone").onclick = escolherIcone;
+    // capa: prévia ao vivo do escurecimento; a foto é reduzida e comprimida no próprio celular antes de subir
+    const prevCapa = $("#capaPrev"), opIn = $("#capaOp"), btSalvarOp = $("#ajCapaSalvar");
+    opIn.oninput = () => { prevCapa.style.setProperty("--capa-op", opIn.value / 100); $("#capaOpV").textContent = opIn.value + "%"; if (capa) btSalvarOp.hidden = Number(opIn.value) === esc0; };
+    btSalvarOp.onclick = async () => { await salvarCfg({ capa: Object.assign({}, c.capa, { escurecer: Number(opIn.value) }) }); aj(); };
+    $("#ajCapa").onclick = () => escolherArquivo(async arq => {
+      const bt = $("#ajCapa"); bt.disabled = true; bt.textContent = "Enviando…";
+      try {
+        const blob = await fotoCapa(arq);
+        await S.enviarLogo(ctx.bid, [{ nome: "capa.webp", blob }]);
+        await salvarCfg({ capa: { v: Date.now(), escurecer: Number(opIn.value) } }); aj();
+      } catch (er) { U.toast(er.message || "Não foi possível enviar a foto."); bt.disabled = false; bt.textContent = capa ? "Trocar foto" : "Enviar foto"; }
+    });
+    const sc = $("#ajSemCapa"); if (sc) sc.onclick = async () => { await salvarCfg({ capa: null }); aj(); };
     const si = $("#ajSemIcone"); if (si) si.onclick = async () => { await salvarCfg({ logo: null }); desenhar(); };
     $("#ajCp").onclick = () => U.copiar(link);
     $("#ajQr").onclick = () => qr(link);
