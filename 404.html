@@ -6,11 +6,27 @@
   // GitHub Pages publica em /NOME-DO-REPO/. Se o seu repositório tiver outro nome, troque aqui (e no 404.html).
   (function () { var REPO = "barbearia", p = location.pathname.split("/")[1];
     window.BASE = location.hostname.endsWith(".github.io") && p === REPO ? "/" + REPO + "/" : "/";
-    document.write('<base href="' + window.BASE + '">'); })();
+    document.write('<base href="' + window.BASE + '">');
+    var resto = location.pathname.slice(window.BASE.length).replace(/^index\.html$/, "");
+    if (resto) document.documentElement.className += " nao-raiz"; })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>LKBarber</title>
-<meta name="description" content="LKBarber: agenda online para barbearias. O cliente marca em segundos, o barbeiro organiza o dia.">
+<title>LKBarber · Agenda online para barbearias</title>
+<meta name="description" content="Agenda online para barbearias: o cliente marca sozinho, 24h, só com o nome. Cada barbeiro com sua agenda, app com o seu logo, relatórios e comissão. Teste grátis por 14 dias.">
+<link rel="canonical" href="https://lukbrdev.github.io/barbearia/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="LKBarber">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:title" content="LKBarber · A agenda da sua barbearia no celular do cliente">
+<meta property="og:description" content="O cliente marca sozinho, 24h, só com o nome. Cada barbeiro com sua agenda. 14 dias grátis, sem fidelidade.">
+<meta property="og:url" content="https://lukbrdev.github.io/barbearia/">
+<meta property="og:image" content="https://lukbrdev.github.io/barbearia/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="App LKBarber: agenda da barbearia e tela de agendamento do cliente">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://lukbrdev.github.io/barbearia/img/og.png">
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"LKBarber","applicationCategory":"BusinessApplication","operatingSystem":"Web, Android, iOS","description":"Agenda online para barbearias: o cliente marca sozinho, cada barbeiro com sua agenda, relatórios e comissão.","url":"https://lukbrdev.github.io/barbearia/","inLanguage":"pt-BR"}</script>
 <meta name="theme-color" content="#16181d">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
@@ -25,9 +41,125 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
-<header class="top" id="topo"></header>
-<main id="app" tabindex="-1"></main>
-<footer class="rodape" id="rodape"></footer>
+<header class="top" id="topo"><a class="marca" href="./"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#poste"/></svg><span>LKBarber</span></a>
+  <div class="topo-acoes"><a class="btn btn-mini btn-claro" href="painel">Entrar</a></div></header>
+<main id="app" tabindex="-1">
+<div id="landing">
+  <section class="l-hero">
+    <div class="l-hero-txt">
+      <h1>A agenda da sua barbearia, no celular do cliente.</h1>
+      <p class="l-sub">Seu link próprio, horários livres em tempo real e o cliente marca em 4 toques, só com o nome. Cada barbeiro com a sua agenda.</p>
+      <div class="l-ctas"><a class="btn btn-grande" href="cadastro" data-link-l="/cadastro">Testar grátis por 14 dias</a>
+        <a class="btn btn-grande btn-vidro" href="#planos">Ver planos</a></div>
+      <p class="l-mini">Sem cartão para testar. Sem app de loja: o cliente instala direto do navegador. <a id="demoLink" href="demo" data-link-l="/demo" hidden>Ver uma barbearia de exemplo →</a></p>
+    </div>
+    <div class="celular" aria-hidden="true">
+      <div class="cel-tela">
+        <div class="cel-topo"><svg viewBox="0 0 24 24"><use href="#poste"/></svg>Sua barbearia</div>
+        <div class="cel-corpo">
+          <b class="cel-t">Com quem?</b>
+          <div class="cel-profs"><span class="on">Qualquer um</span><span>Rafa</span><span>Léo</span></div>
+          <b class="cel-t">Sábado</b>
+          <div class="cel-horas"><span>09:00</span><span class="x">09:30</span><span class="x">10:00</span><span>10:30</span><span class="on">11:00</span><span>11:30</span><span class="x">13:00</span><span>13:30</span><span>14:00</span></div>
+          <div class="cel-nome">João</div>
+          <div class="cel-btn">Confirmar · Corte</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="antes-depois">
+    <h2>Chega de marcar horário no WhatsApp</h2>
+    <div class="antes-depois">
+      <div class="ad antes"><h3>Sem o LKBarber</h3><ul>
+        <li>Para o corte para responder "tem horário amanhã?"</li>
+        <li>Cliente que manda mensagem à noite fica sem resposta e marca em outro lugar</li>
+        <li>Agenda no caderno, horário duplicado e esquecido</li>
+        <li>Falta sem aviso e cadeira vazia</li>
+        <li>No fim do mês, a comissão é feita na calculadora</li></ul></div>
+      <div class="ad depois"><h3>Com o LKBarber</h3><ul>
+        <li>O cliente vê os horários livres e marca sozinho, 24 horas</li>
+        <li>Você só olha a agenda do dia no celular</li>
+        <li>O sistema não deixa dois clientes no mesmo horário</li>
+        <li>O cliente salva o horário no calendário com lembrete e cancela pelo app</li>
+        <li>Faturamento e comissão de cada barbeiro calculados sozinhos</li></ul></div>
+    </div>
+  </section>
+
+  <section class="band" id="beneficios">
+    <h2>Tudo o que a barbearia precisa</h2>
+    <div class="beneficios">
+      <div class="bf"><svg viewBox="0 0 24 24"><path d="M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg><h3>Agenda aberta 24h</h3><p>Domingo, madrugada, no meio do corte: o cliente marca sem você parar.</p></div>
+      <div class="bf"><svg viewBox="0 0 24 24"><path d="M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7zM22 19v-1a4 4 0 0 0-3-3.9M16 3.1a3.5 3.5 0 0 1 0 6.8"/></svg><h3>Cada barbeiro com sua agenda</h3><p>O cliente escolhe com quem cortar ou "qualquer um". Cada barbeiro entra com o próprio login.</p></div>
+      <div class="bf"><svg viewBox="0 0 24 24"><path d="M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM9 14l2 2 4-4"/></svg><h3>Menos faltas</h3><p>O cliente salva o horário no calendário do celular, com lembrete, e cancela pelo app se não puder ir.</p></div>
+      <div class="bf"><svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zM9 9h6v6H9z"/></svg><h3>App com a sua marca</h3><p>Seu logo vira o ícone do app no celular do cliente. Link próprio e QR Code para o balcão.</p></div>
+      <div class="bf"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><h3>Relatórios e comissão</h3><p>Faturamento, ticket médio, horário de pico, faltas e comissão de cada barbeiro, sem planilha.</p></div>
+      <div class="bf"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg><h3>Encaixes e folgas</h3><p>Registre quem chegou sem marcar e bloqueie feriados, folgas e horários de almoço.</p></div>
+    </div>
+  </section>
+
+  <section class="band band-escura" id="telas">
+    <h2>Veja o app por dentro</h2>
+    <p class="sub">Telas reais do LKBarber, com uma barbearia de exemplo.</p>
+    <div class="telas" id="telasTrilho" tabindex="0" aria-label="Telas do app">
+      <figure class="tela"><picture><source type="image/webp" srcset="img/tela-pagina.webp"><img src="img/tela-pagina.jpg" width="540" height="1169" loading="lazy" alt="Página da barbearia com logo, equipe e botão Agendar horário"></picture><figcaption><b>A página da barbearia</b>Seu logo, sua equipe, seus serviços e o próximo horário livre.</figcaption></figure>
+      <figure class="tela"><picture><source type="image/webp" srcset="img/tela-agendar.webp"><img src="img/tela-agendar.jpg" width="540" height="1169" loading="lazy" alt="Tela de agendamento com dias e horários livres"></picture><figcaption><b>O cliente agenda</b>Escolhe serviço, barbeiro, dia e horário. Só digita o nome.</figcaption></figure>
+      <figure class="tela"><picture><source type="image/webp" srcset="img/tela-agenda.webp"><img src="img/tela-agenda.jpg" width="540" height="1169" loading="lazy" alt="Agenda do dia no painel do barbeiro"></picture><figcaption><b>A agenda do dia</b>Concluir, marcar falta, cancelar e chamar no WhatsApp com um toque.</figcaption></figure>
+      <figure class="tela"><picture><source type="image/webp" srcset="img/tela-relatorios.webp"><img src="img/tela-relatorios.jpg" width="540" height="1169" loading="lazy" alt="Relatórios com faturamento e comissão por barbeiro"></picture><figcaption><b>Relatórios</b>Faturamento, ticket médio e a comissão de cada barbeiro.</figcaption></figure>
+    </div>
+    <div class="telas-nav"><button class="btn btn-mini btn-vidro" id="telaAnt" aria-label="Tela anterior">‹</button><button class="btn btn-mini btn-vidro" id="telaProx" aria-label="Próxima tela">›</button></div>
+  </section>
+
+  <section class="band" id="como-funciona">
+    <h2>Como funciona</h2>
+    <ol class="passos">
+      <li><b>Crie sua barbearia</b><span>Escolha o endereço: <span class="dominio">lukbrdev.github.io/barbearia/</span><i>sua-barbearia</i>.</span></li>
+      <li><b>Configure em minutos</b><span>Serviços, preços, horários, seu logo e a equipe. Cada barbeiro recebe um convite.</span></li>
+      <li><b>Divulgue o link</b><span>Na bio do Instagram, no WhatsApp ou no QR Code do balcão.</span></li>
+    </ol>
+  </section>
+
+  <section class="band band-escura">
+    <h2>Um app, três visões</h2>
+    <div class="tres">
+      <div><h3>Cliente</h3><ul><li>Agenda sem cadastro, só o nome</li><li>Escolhe o barbeiro ou "qualquer um"</li><li>Lembrete no calendário e aviso no WhatsApp</li><li>Cancela sozinho, sem ligar</li></ul></div>
+      <div><h3>Barbeiro</h3><ul><li>Vê só a própria agenda</li><li>Conclui, marca falta, faz encaixe</li><li>Bloqueia as próprias folgas</li><li>Acompanha o que ganhou</li></ul></div>
+      <div><h3>Dono</h3><ul><li>Agenda de toda a equipe</li><li>Serviços, preços e horários</li><li>Faturamento e comissão por barbeiro</li><li>Histórico de clientes</li></ul></div>
+    </div>
+  </section>
+
+  <section class="band" id="planos">
+    <h2>Planos</h2>
+    <ul class="selos"><li>14 dias grátis</li><li>Sem fidelidade</li><li>Cartão, Pix ou boleto</li></ul>
+    <div class="planos" id="lPlanos">
+      <div class="plano"><h3>Solo</h3><p>Para quem atende sozinho.</p><p class="lim">1 barbeiro</p><a class="btn btn-sec" href="cadastro" data-link-l="/cadastro">Começar teste grátis</a></div>
+      <div class="plano destaque"><h3>Equipe</h3><p>Até 5 barbeiros, cada um com sua agenda.</p><p class="lim">Até 5 barbeiros</p><a class="btn" href="cadastro" data-link-l="/cadastro">Começar teste grátis</a></div>
+      <div class="plano"><h3>Ilimitado</h3><p>Barbeiros sem limite e relatórios por profissional.</p><p class="lim">Barbeiros ilimitados</p><a class="btn btn-sec" href="cadastro" data-link-l="/cadastro">Começar teste grátis</a></div>
+    </div>
+    <div class="inclui"><b>Todos os planos incluem:</b>
+      <ul><li>Agenda online com link próprio</li><li>App instalável com o seu logo</li><li>Painel para dono e barbeiros</li><li>Relatórios e comissão</li><li>QR Code para o balcão</li><li>Suporte pelo WhatsApp</li></ul></div>
+  </section>
+
+  <section class="band" id="perguntas">
+    <h2>Perguntas</h2>
+    <details class="faq"><summary>O cliente precisa baixar algum app?</summary><p>Não. Ele abre o link da barbearia e agenda. Se quiser, instala na tela inicial pelo próprio navegador, com o ícone da sua barbearia.</p></details>
+    <details class="faq"><summary>O cliente precisa criar conta?</summary><p>Não. Ele só digita o nome (e o WhatsApp, se você quiser pedir). Os horários dele ficam salvos no celular.</p></details>
+    <details class="faq"><summary>E se dois clientes tentarem o mesmo horário?</summary><p>O sistema confere na hora de salvar. O segundo recebe o aviso e escolhe outro horário.</p></details>
+    <details class="faq"><summary>Cada barbeiro tem login próprio?</summary><p>Sim. O dono envia um convite e o barbeiro cria a senha dele. Ele só enxerga a própria agenda e os próprios ganhos.</p></details>
+    <details class="faq"><summary>Como funciona o pagamento?</summary><p>Mensal, no cartão de crédito (cobrança automática), Pix ou boleto, pela página segura do Asaas. O LKBarber não vê os dados do seu cartão.</p></details>
+    <details class="faq"><summary>Tem fidelidade? Como cancelo?</summary><p>Não tem fidelidade. Você cancela pelo próprio painel e a agenda funciona até o fim do período já pago.</p></details>
+    <details class="faq"><summary>O que acontece depois do teste grátis?</summary><p>Você escolhe um plano para continuar. Sem plano, a agenda online pausa, mas seus dados ficam guardados.</p></details>
+    <details class="faq"><summary>E os dados dos meus clientes?</summary><p>Ficam protegidos e só a sua barbearia vê. Veja a <a href="privacidade/">Política de Privacidade</a>.</p></details>
+  </section>
+
+  <section class="band cta-final">
+    <h2>Comece hoje. Em 5 minutos sua agenda está no ar.</h2>
+    <div class="l-ctas"><a class="btn btn-grande" href="cadastro" data-link-l="/cadastro">Criar minha barbearia grátis</a>
+      <a class="btn btn-grande btn-ok" id="waVendas" href="https://wa.me/5538998504119?text=Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20LKBarber." target="_blank" rel="noopener">Tirar dúvidas no WhatsApp</a></div>
+  </section>
+</div>
+</main>
+<footer class="rodape" id="rodape"><span>© LKBarber</span><span class="links-legais"><a href="termos/">Termos de Uso</a> · <a href="privacidade/">Privacidade</a></span><small class="lukdev">Feito por LukDev</small></footer>
 <nav class="tabbar" id="tabbar" aria-label="Navegação" hidden></nav>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>

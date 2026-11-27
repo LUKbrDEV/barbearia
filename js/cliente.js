@@ -28,7 +28,7 @@
     U.moldura({ marca: nome, marcaHref: base, ativo: view, logo: ic && ic.i192, tabs: [
       { id: "inicio", txt: "Início", href: base }, { id: "agendar", txt: "Agendar", href: base + "/agendar" },
       { id: "meus", txt: "Meus", href: base + "/meus" }, { id: "info", txt: "Info", href: base + "/info" }] });
-    U.rodapeHTML(`<a href="/painel" data-link class="link-painel">Área do barbeiro</a><small class="lukdev">Agenda por <a href="/" data-link>${esc(P.nome)}</a></small>`);
+    U.rodapeHTML(`<a href="/painel" data-link class="link-painel">Área do barbeiro</a><small class="lukdev">Agenda por <a href="/" data-link>${esc(P.nome)}</a> · <a href="/privacidade/">Privacidade</a></small>`);
     if (!A.liberada(d.b, U.hoje()) && view === "agendar") return pausada();
     ({ inicio, agendar, meus, info })[view]();
   }
@@ -128,7 +128,7 @@
   function desenharDias() {
     const h0 = U.hoje(); let html = "";
     for (let i = 0; i < atual.cfg.diasAgenda; i++) {
-      const d = A.addDays(h0, i), dt = A.parseYMD(d), fechado = calc(d).fechado;
+      const d = A.addDays(h0, i), dt = A.parseYMD(d), rr = calc(d), fechado = rr.fechado || !rr.slots.some(x => x.livre); // fechado ou lotado
       html += `<label class="op ${fechado ? "fechado" : ""}"><input type="radio" name="dia" value="${d}" ${st.dia === d ? "checked" : ""}><span><small>${i === 0 ? "hoje" : i === 1 ? "amanhã" : dt.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</small><b>${dt.getDate()}</b><small>${dt.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</small></span></label>`;
     }
     $("#escDia").innerHTML = html;

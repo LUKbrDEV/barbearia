@@ -286,6 +286,20 @@ begin
   return v_b;
 end $$;
 
+-- Cadastro com confirmação de e-mail: os dados da barbearia vão junto com a conta (user_metadata.cad).
+-- No primeiro login, em qualquer navegador ou aparelho, o painel chama esta função e a barbearia é criada.
+create or replace function criar_barbearia_pendente() returns json
+language plpgsql security definer set search_path = public as $$
+declare v_cad jsonb; v_id uuid;
+begin
+  if auth.uid() is null then raise exception 'entre na sua conta'; end if;
+  if exists (select 1 from membros where user_id = auth.uid()) then return null; end if;   -- já tem barbearia
+  select raw_user_meta_data->'cad' into v_cad from auth.users where id = auth.uid();
+  if v_cad is null or coalesce(v_cad->>'slug', '') = '' then return null; end if;
+  v_id := criar_barbearia(coalesce(v_cad->>'nome', 'Minha barbearia'), v_cad->>'slug', coalesce(nullif(v_cad->>'nomeDono', ''), 'Dono'));
+  return json_build_object('id', v_id, 'slug', lower(v_cad->>'slug'));
+end $$;
+
 create or replace function profissionais_da_barbearia(p_bid uuid) returns json language sql stable security definer set search_path = public as $$
   select coalesce(json_agg(json_build_object('id', p.id, 'nome', p.nome, 'dias', p.dias, 'ativo', p.ativo, 'comissao', p.comissao,
            'ordem', p.ordem, 'email', p.email, 'tem_acesso', exists (select 1 from membros m where m.prof_id = p.id)) order by p.ordem, p.nome), '[]'::json)
@@ -422,6 +436,8 @@ revoke all on function slug_disponivel(text), dados_publicos(text), horarios_ocu
   agendar(text, text, uuid, text, text, date, time), cancelar_agendamento(uuid, text), status_agendamentos(uuid[]) from public;
 grant execute on function slug_disponivel(text), dados_publicos(text), horarios_ocupados(text, date, date),
   agendar(text, text, uuid, text, text, date, time), cancelar_agendamento(uuid, text), status_agendamentos(uuid[]) to anon, authenticated;
+revoke all on function criar_barbearia_pendente() from public, anon;
+grant execute on function criar_barbearia_pendente() to authenticated;
 revoke all on function sou_super(), meus_acessos(), criar_barbearia(text, text, text), profissionais_da_barbearia(uuid),
   gerar_convite(uuid), aceitar_convite(text), remover_acesso(uuid), todas_barbearias() from public, anon;
 grant execute on function sou_super(), meus_acessos(), criar_barbearia(text, text, text), profissionais_da_barbearia(uuid),

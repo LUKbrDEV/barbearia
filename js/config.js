@@ -11,9 +11,15 @@ window.BARBER_BACKEND = {
 window.PLATAFORMA = {
   nome: "LKBarber",
   suporteWhatsapp: "38998504119",           // seu WhatsApp de suporte, com DDD (ex.: "38999990000")
-  diasTeste: 14,                 // só texto; o prazo real está em criar_barbearia() no schema.sql
+  diasTeste: 14,
+  demoSlug: "demo",              // barbearia de exemplo: crie uma com esse endereço e o link aparece no site
+  // Aparecem nos Termos de Uso e na Política de Privacidade (preencha antes de vender):
+  responsavel: "Lucas Santos",               // seu nome completo ou razão social
+  documento: "70047445661",                 // CPF ou CNPJ
+  email: "lucasinfotec20@gmail.com",                     // e-mail de contato e para pedidos de privacidade (LGPD)
+  foro: "Paracatu/ MG",                      // cidade/UF do foro, ex.: "Montes Claros/MG"                 // só texto; o prazo real está em criar_barbearia() no schema.sql
   reservados: ["painel", "admin", "entrar", "cadastro", "api", "css", "js", "icons", "supabase", "index.html", "404.html", "sw.js",
-    "manifest.webmanifest", "termos", "privacidade", "lkbarber", "suporte", "ajuda", "app"]
+    "manifest.webmanifest", "termos", "privacidade", "img", "lkbarber", "suporte", "ajuda", "app"]
 };
 
 // Configuração inicial de toda barbearia nova (editável no painel).

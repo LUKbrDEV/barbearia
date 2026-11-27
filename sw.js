@@ -1,5 +1,5 @@
 // Service worker: offline + instalável. Troque VERSAO a cada atualização publicada.
-const VERSAO = "lkbarber-v5";
+const VERSAO = "lkbarber-v6";
 const ESCOPO = self.registration.scope; // "/" ou "/repo/" no GitHub Pages
 const ARQUIVOS = ["./", "index.html", "css/style.css", "js/config.js", "js/agenda.js", "js/store.js", "js/app.js", "js/landing.js",
   "js/cliente.js", "js/painel.js", "js/admin.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];

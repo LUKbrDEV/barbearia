@@ -98,6 +98,17 @@ Com a conta Asaas de produção aprovada: gere a chave de produção, troque `AS
 - **Preços**: em `/admin → Preços dos planos` (valem para novas assinaturas e trocas; quem já assina mantém o valor).
 - Exceções manuais em `/admin`: "Ativar +30 dias", "Teste +7 dias", bloquear/desbloquear.
 
+## Página de vendas, prévia de links e páginas legais
+- O conteúdo da página de vendas está escrito no `index.html` (o Google e a prévia do WhatsApp leem sem JavaScript).
+  Para mudar textos, edite lá e **copie o `index.html` para o `404.html`**.
+- Prévia de link (WhatsApp/Instagram/Facebook): tags `og:` no `index.html`, imagem `img/og.png` (1200×630).
+  Se mudar de domínio, troque `https://lukbrdev.github.io/barbearia/` nas tags `og:url`, `og:image`, `twitter:image` e `canonical`.
+- Telas do app em `img/tela-*.webp/.jpg` (capturas reais com dados ilustrativos).
+- **Barbearia de exemplo:** cadastre uma barbearia com o endereço `demo` (é o `demoSlug` do `config.js`), configure serviços,
+  logo e alguns horários. O link "Ver uma barbearia de exemplo" aparece sozinho no site quando ela existe.
+- **Termos de Uso** (`/termos/`) e **Política de Privacidade** (`/privacidade/`): preencha `responsavel`, `documento`,
+  `email` e `foro` no `config.js`. São um ponto de partida alinhado ao que o app faz; vale revisar com um advogado.
+
 ## Ícone de cada barbearia
 Dono → Mais → **Ícone, dados, link e QR Code** → Enviar ícone. O app recorta e gera 3 PNGs (512, 192 e
 "maskable" para Android) e salva no Storage (bucket `logos`, criado pelo `schema.sql`). O ícone aparece no
@@ -122,6 +133,8 @@ js/landing.js                site de vendas e cadastros
 js/cliente.js                página pública da barbearia
 js/painel.js                 painel do dono e do barbeiro (horários, assinatura, ícone…)
 js/admin.js                  super admin
+termos/, privacidade/        páginas legais (HTML estático)
+img/                         imagem de prévia (og.png) e telas do app
 supabase/schema.sql          tabelas, RLS, planos, cobrança, Storage
 supabase/functions/          Edge Functions: assinatura e asaas-webhook
 sw.js, manifest.webmanifest, icons/, vercel.json, _redirects

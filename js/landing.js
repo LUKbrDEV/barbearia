@@ -4,68 +4,30 @@
   const { esc, money, $ } = U;
   const app = () => $("#app");
 
+  // O conteúdo da página de vendas está no index.html (para Google e prévia de links). Aqui só reaproveitamos.
+  const LANDING_HTML = (() => { const el = document.getElementById("landing");
+    return el ? el.outerHTML.replace(/href="[^"]*" data-link-l="([^"]*)"/g, 'href="$1" data-link') : ""; })();
+
   function topoSite() {
-    U.manifestPadrao(); document.title = P.nome;
+    U.manifestPadrao(); document.title = P.nome + " · Agenda online para barbearias";
     U.moldura({ marca: P.nome, acoes: `<a class="btn btn-mini btn-claro" href="/painel" data-link>Entrar</a>` });
-    U.rodapeHTML(`<span>© ${new Date().getFullYear()} ${esc(P.nome)}</span>`);
+    U.rodapeHTML(`<span>© ${new Date().getFullYear()} ${esc(P.nome)}</span><span class="links-legais"><a href="/termos/">Termos de Uso</a> · <a href="/privacidade/">Privacidade</a>${P.suporteWhatsapp ? ` · <a href="${esc(U.wa(P.suporteWhatsapp, "Olá! Preciso de ajuda com o " + P.nome + "."))}" target="_blank" rel="noopener">Suporte</a>` : ""}</span>`);
   }
 
   function inicio() {
     topoSite();
-    app().innerHTML = `
-    <section class="l-hero">
-      <div class="l-hero-txt">
-        <h1>A agenda da sua barbearia, no celular do cliente.</h1>
-        <p class="l-sub">Seu link próprio, horários livres em tempo real e o cliente marca em 4 toques, só com o nome. Cada barbeiro com a sua agenda.</p>
-        <div class="l-ctas"><a class="btn btn-grande" href="/cadastro" data-link>Testar grátis por ${P.diasTeste} dias</a>
-        <a class="btn btn-grande btn-vidro" href="#planos">Ver planos</a></div>
-        <p class="l-mini">Sem cartão. Sem app para baixar: o cliente instala direto do navegador.</p>
-      </div>
-      <div class="celular" aria-hidden="true">
-        <div class="cel-tela">
-          <div class="cel-topo"><svg viewBox="0 0 24 24"><use href="#poste"/></svg>Barbearia Navalha</div>
-          <div class="cel-corpo">
-            <b class="cel-t">Com quem?</b>
-            <div class="cel-profs"><span class="on">Qualquer um</span><span>Rafa</span><span>Léo</span></div>
-            <b class="cel-t">Sábado, 28</b>
-            <div class="cel-horas">${["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "13:00", "13:30", "14:00"].map((h, i) => `<span class="${i === 4 ? "on" : [1, 2, 6].includes(i) ? "x" : ""}">${h}</span>`).join("")}</div>
-            <div class="cel-nome">João</div>
-            <div class="cel-btn">Confirmar · Corte R$ 40</div>
-          </div>
-        </div>
-      </div>
-    </section>
-    <section class="band">
-      <h2>Como funciona</h2>
-      <ol class="passos">
-        <li><b>Crie sua barbearia</b><span>Escolha o endereço: ${esc(dominio())}<i>sua-barbearia</i>.</span></li>
-        <li><b>Configure em minutos</b><span>Serviços, preços, horários e a equipe. Cada barbeiro recebe um convite.</span></li>
-        <li><b>Divulgue o link</b><span>Na bio do Instagram, no WhatsApp ou no QR Code do balcão.</span></li>
-      </ol>
-    </section>
-    <section class="band band-escura">
-      <h2>Um app, três visões</h2>
-      <div class="tres">
-        <div><h3>Cliente</h3><ul><li>Agenda sem cadastro, só o nome</li><li>Escolhe o barbeiro ou “qualquer um”</li><li>Lembrete no calendário e aviso no WhatsApp</li><li>Cancela sozinho, sem ligar</li></ul></div>
-        <div><h3>Barbeiro</h3><ul><li>Vê só a própria agenda</li><li>Conclui, marca falta, faz encaixe</li><li>Bloqueia as próprias folgas</li><li>Acompanha o que ganhou</li></ul></div>
-        <div><h3>Dono</h3><ul><li>Agenda de toda a equipe</li><li>Serviços, preços e horários</li><li>Faturamento e comissão por barbeiro</li><li>Histórico de clientes</li></ul></div>
-      </div>
-    </section>
-    <section class="band" id="planos">
-      <h2>Planos</h2>
-      <div class="planos" id="lPlanos"><p class="vazio">Carregando planos…</p></div>
-      <p class="l-mini" style="color:var(--mut)">Todos os planos com agenda online, painel, relatórios e app instalável. Pague com cartão (cobrança automática), Pix ou boleto. Cancele quando quiser.</p>
-    </section>
-    <section class="band">
-      <h2>Perguntas</h2>
-      <details class="faq"><summary>O cliente precisa baixar algum app?</summary><p>Não. Ele abre o link da barbearia e agenda. Se quiser, instala na tela inicial pelo próprio navegador.</p></details>
-      <details class="faq"><summary>E se dois clientes tentarem o mesmo horário?</summary><p>O sistema confere na hora de salvar. O segundo recebe o aviso e escolhe outro horário.</p></details>
-      <details class="faq"><summary>Cada barbeiro tem login próprio?</summary><p>Sim. O dono envia um convite e o barbeiro cria a senha dele. Ele só enxerga a própria agenda.</p></details>
-      <details class="faq"><summary>O que acontece depois do teste?</summary><p>Você escolhe um plano para continuar. Sem plano, a agenda online pausa, mas seus dados ficam guardados.</p></details>
-      <p style="margin-top:22px"><a class="btn btn-grande" href="/cadastro" data-link>Criar minha barbearia</a></p>
-    </section>`;
-    U.planos().then(l => { const el = $("#lPlanos"); if (el) el.innerHTML = cartoesPlanos(l, "/cadastro", "Começar teste grátis"); })
-      .catch(() => { const el = $("#lPlanos"); if (el) el.innerHTML = `<p class="vazio">Não foi possível carregar os planos agora.</p>`; });
+    app().innerHTML = LANDING_HTML || `<div class="form-pag"><h1>${esc(P.nome)}</h1></div>`;
+    document.querySelectorAll(".dominio").forEach(el => el.textContent = dominio());
+    const wa = $("#waVendas");
+    if (wa) { if (P.suporteWhatsapp) wa.href = U.wa(P.suporteWhatsapp, "Olá! Quero saber mais sobre o " + P.nome + "."); else wa.hidden = true; }
+    // barbearia de exemplo: o link só aparece se ela existir de verdade
+    if (P.demoSlug) S.publico(P.demoSlug).then(d => { const l = $("#demoLink"); if (d && l) { l.hidden = false; l.setAttribute("href", U.url("/" + P.demoSlug)); l.dataset.raw = "/" + P.demoSlug; l.setAttribute("data-link", ""); } }).catch(() => {});
+    // carrossel das telas
+    const tr = $("#telasTrilho");
+    if (tr) { const passo = d => tr.scrollBy({ left: d * (tr.querySelector(".tela").offsetWidth + 16), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      $("#telaAnt").onclick = () => passo(-1); $("#telaProx").onclick = () => passo(1);
+      tr.onkeydown = e => { if (e.key === "ArrowRight") passo(1); if (e.key === "ArrowLeft") passo(-1); }; }
+    U.planos().then(l => { const el = $("#lPlanos"); if (el && l.length) el.innerHTML = cartoesPlanos(l, "/cadastro", "Começar teste grátis"); }).catch(() => {});
   }
   const dominio = () => location.host + (window.BASE || "/");
   // cartões de plano (usados aqui e na assinatura do painel)
@@ -82,22 +44,26 @@
     topoSite();
     const conv = new URLSearchParams(location.search).get("convite") || "";
     if (conv || location.search.includes("barbeiro")) return cadastroBarbeiro(conv);
+    const logado = S.logado(), eu = S.usuario() || {};
     app().innerHTML = `<form class="form-pag" id="fCad" novalidate>
       <h1>Crie sua barbearia</h1><p class="l-sub2">${P.diasTeste} dias grátis. Leva 1 minuto.</p>
+      ${logado ? `<p class="aviso">Você está conectado como <b>${esc(eu.email || "")}</b>. A barbearia será criada nessa conta. <button type="button" class="lnk" id="cadSair">Usar outra conta</button></p>` : ""}
       <label class="lbl">Nome da barbearia<input name="nome" required maxlength="60" placeholder="Ex.: Barbearia do Zé"></label>
       <label class="lbl">Endereço da sua página
-        <div class="slug-box"><span>${esc(dominio())}</span><input name="slug" required maxlength="40" autocapitalize="none" autocomplete="off" spellcheck="false"></div>
+        <input name="slug" required maxlength="40" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="ex.: barbearia-do-ze">
+        <small class="link-prev">Seu link: ${esc(dominio())}<b id="slugPrev">sua-barbearia</b></small>
         <small id="slugMsg" class="dica"></small></label>
       <label class="lbl">Seu nome<input name="dono" required maxlength="40" autocomplete="name" placeholder="Como aparece para os clientes"></label>
-      <label class="lbl">E-mail<input name="email" type="email" required autocomplete="email"></label>
-      <label class="lbl">Senha<input name="senha" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>
+      ${logado ? "" : `<label class="lbl">E-mail<input name="email" type="email" required autocomplete="email"></label>
+      <label class="lbl">Senha<input name="senha" type="password" required minlength="6" autocomplete="new-password" placeholder="Mínimo 6 caracteres"></label>`}
       <p class="erro" id="cadErro" role="alert"></p>
-      <button class="btn btn-grande" style="width:100%">Criar e começar o teste</button>
-      <p class="centro">Já tem conta? <a href="/painel" data-link>Entrar</a> · Recebeu convite? <a href="/cadastro?barbeiro=1" data-link>Sou barbeiro</a></p></form>`;
+      <button class="btn btn-grande" id="cadBtn" style="width:100%">Criar e começar o teste</button>
+      ${logado ? "" : `<p class="centro">Já tem conta? <a href="/painel" data-link>Entrar</a> · Recebeu convite? <a href="/cadastro?barbeiro=1" data-link>Sou barbeiro</a></p>`}</form>`;
+    const cs = $("#cadSair"); if (cs) cs.onclick = () => { S.sair(); U.ls.set("bb_bid", null); cadastro(); };
     const f = $("#fCad"), msg = $("#slugMsg");
     let editouSlug = false, t;
     const checar = () => {
-      clearTimeout(t); const s = f.slug.value;
+      clearTimeout(t); const s = f.slug.value; $("#slugPrev").textContent = s || "sua-barbearia";
       if (!s) { msg.textContent = ""; return; }
       if (!S.slugOk(s)) { msg.textContent = "Use de 3 a 40 letras minúsculas, números e hífen."; msg.className = "dica ruim"; return; }
       msg.textContent = "Verificando…"; msg.className = "dica";
@@ -108,16 +74,19 @@
     f.slug.oninput = () => { editouSlug = true; f.slug.value = U.slugify(f.slug.value.replace(/\s/g, "-")).slice(0, 40); checar(); };
     f.onsubmit = async e => {
       e.preventDefault(); const err = $("#cadErro"); err.textContent = "";
-      const d = { nome: f.nome.value.trim(), slug: f.slug.value.trim(), nomeDono: f.dono.value.trim(), email: f.email.value.trim(), senha: f.senha.value };
-      if (d.nome.length < 2 || !d.nomeDono || !d.email.includes("@")) { err.textContent = "Preencha todos os campos."; return; }
-      if (d.senha.length < 6) { err.textContent = "A senha precisa de pelo menos 6 caracteres."; return; }
-      const btn = f.querySelector("button"); btn.disabled = true; btn.textContent = "Criando…";
+      const d = { nome: f.nome.value.trim(), slug: f.slug.value.trim(), nomeDono: f.dono.value.trim(), email: logado ? "" : f.email.value.trim(), senha: logado ? "" : f.senha.value };
+      if (d.nome.length < 2 || !d.nomeDono || (!logado && !d.email.includes("@"))) { err.textContent = "Preencha todos os campos."; return; }
+      if (!S.slugOk(d.slug)) { err.textContent = "Escolha um endereço com 3 a 40 letras minúsculas, números e hífen."; return; }
+      if (!logado && d.senha.length < 6) { err.textContent = "A senha precisa de pelo menos 6 caracteres."; return; }
+      const btn = $("#cadBtn"); btn.disabled = true; btn.textContent = "Criando…";
       try {
         if (!(await S.slugLivre(d.slug))) throw new Error("Esse endereço já está em uso.");
-        const r = await S.criarConta(d.email, d.senha);
+        // os dados da barbearia vão junto com a conta: se o e-mail precisar ser confirmado
+        // (mesmo abrindo o link em outro navegador ou no celular), ela é criada no primeiro login
+        const r = logado ? { pendente: false } : await S.criarConta(d.email, d.senha, { cad: { nome: d.nome, slug: d.slug, nomeDono: d.nomeDono } });
         if (r.pendente) {
           U.ls.set("bb_cad_pendente", { nome: d.nome, slug: d.slug, nomeDono: d.nomeDono });
-          app().innerHTML = `<div class="form-pag"><h1>Confirme seu e-mail</h1><p>Enviamos um link para <b>${esc(d.email)}</b>. Depois de confirmar, entre com sua senha e sua barbearia será criada.</p><a class="btn" href="/painel" data-link>Ir para o login</a></div>`;
+          app().innerHTML = `<div class="form-pag"><h1>Confirme seu e-mail</h1><p>Enviamos um link para <b>${esc(d.email)}</b>. Abra o link (pode ser no celular ou em outro navegador): você entra direto e a <b>${esc(d.nome)}</b> é criada automaticamente.</p><p class="sub">Não chegou? Veja a caixa de spam ou promoções.</p><a class="btn" href="/painel" data-link>Ir para o login</a></div>`;
           return;
         }
         await S.criarBarbearia(d);

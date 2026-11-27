@@ -100,15 +100,16 @@
     usuario() { const s = sess.get(); return s && s.user; },
     async souSuper() { return !!(await rpc("sou_super", {}, true)); },
     async acessos() { return (await rpc("meus_acessos", {}, true)) || []; },
-    async criarConta(email, senha) {
+    async criarConta(email, senha, meta) {
       const base = location.origin + (window.BASE || "/");
-      const r = await fetch(URL_ + "/auth/v1/signup?redirect_to=" + q(base + "painel"), { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify({ email, password: senha }) });
+      const r = await fetch(URL_ + "/auth/v1/signup?redirect_to=" + q(base + "painel"), { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify({ email, password: senha, data: meta || {} }) });
       const j = await r.json().catch(() => ({}));
       if (j.access_token) { guardar(j); return { pendente: false }; }
       if (r.ok && (j.id || (j.user && j.user.id))) return { pendente: true };
       const m = j.msg || j.error_description || j.message || "";
       throw new Error(/registered|exists/i.test(m) ? "Este e-mail já tem conta. Use Entrar." : /password/i.test(m) ? "Senha fraca: use pelo menos 6 caracteres." : m || "Não foi possível criar a conta.");
     },
+    async criarPendente() { return await rpc("criar_barbearia_pendente", {}, true); },
     async criarBarbearia({ nome, slug, nomeDono }) { return await rpc("criar_barbearia", { p_nome: nome, p_slug: slug, p_nome_dono: nomeDono }, true); },
     async aceitarConvite(cod) { await rpc("aceitar_convite", { p_codigo: cod.toUpperCase().trim() }, true); },
     // ---- barbearia ----

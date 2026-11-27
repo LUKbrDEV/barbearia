@@ -12,6 +12,7 @@
 
   function parar() { clearInterval(timer); timer = null; }
 
+  let avisoCad = "";
   async function render() {
     parar(); U.manifestPadrao(); document.title = "Painel · " + P.nome;
     U.rodapeHTML(`<span>${esc(P.nome)}</span>`);
@@ -27,8 +28,16 @@
       const conv = new URLSearchParams(location.search).get("convite") || ls.get("bb_convite_pendente", "");
       if (conv) { try { await S.aceitarConvite(conv); U.toast("Convite aceito!"); } catch (e) { U.toast(e.message); } ls.set("bb_convite_pendente", ""); if (location.search) history.replaceState({}, "", U.url("/painel")); }
       let acessos = await S.acessos();
-      const pend = ls.get("bb_cad_pendente", null);
-      if (pend && !acessos.length) { await S.criarBarbearia(pend); ls.set("bb_cad_pendente", null); acessos = await S.acessos(); }
+      avisoCad = "";
+      if (!acessos.length) { // barbearia informada no cadastro (vale em qualquer navegador/aparelho)
+        let criou = null;
+        try { criou = await S.criarPendente(); }
+        catch (e) { avisoCad = /slug|uso/i.test(e.message) ? "O endereço escolhido no cadastro foi usado por outra barbearia. Crie a sua com outro endereço." : e.message; }
+        const pend = ls.get("bb_cad_pendente", null); // cadastros antigos, feitos antes desta versão
+        if (!criou && !avisoCad && pend) { try { await S.criarBarbearia(pend); criou = true; } catch (e) { avisoCad = e.message; } }
+        ls.set("bb_cad_pendente", null);
+        if (criou) { acessos = await S.acessos(); U.toast("Barbearia criada! Configure seus serviços e horários."); }
+      }
       const sup = await S.souSuper();
       if (!acessos.length) return semAcesso(sup);
       let a = acessos.find(x => x.barbearia_id === ls.get("bb_bid", "")) || acessos[0];
@@ -75,7 +84,7 @@
   }
 
   function semAcesso(sup) {
-    app().innerHTML = `<div class="form-pag"><h1>Nenhuma barbearia</h1><p>Sua conta (${esc((S.usuario() || {}).email)}) ainda não faz parte de uma barbearia.</p>
+    app().innerHTML = `<div class="form-pag"><h1>Nenhuma barbearia</h1>${avisoCad ? `<p class="aviso ruim">${esc(avisoCad)}</p>` : ""}<p>Sua conta (${esc((S.usuario() || {}).email)}) ainda não faz parte de uma barbearia. Crie a sua agora, leva 1 minuto.</p>
       <div class="pilha">${sup ? `<a class="btn" href="/admin" data-link>Abrir administração da plataforma</a>` : ""}
       <a class="btn ${sup ? "btn-sec" : ""}" href="/cadastro" data-link>Criar minha barbearia</a>
       <button class="btn btn-sec" id="usarConv">Tenho um código de convite</button><button class="btn btn-sec" id="sair">Sair</button></div></div>`;

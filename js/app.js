@@ -98,6 +98,8 @@
     document.body.dataset.area = r === "painel" ? "painel" : r === "admin" ? "admin" : !r || r === "cadastro" ? "site" : "cliente";
     if (window.Painel) window.Painel.parar && window.Painel.parar();
     if (!window.Store.configurado) return naoConfigurado();
+    // link de e-mail (confirmação/nova senha) que caiu na página inicial: leva para o painel, que faz o login
+    if (!r && /access_token=|error_description=/.test(location.hash)) { history.replaceState({}, "", url("/painel") + location.hash); return window.Painel.render(); }
     if (!r) {
       if (standalone()) { // app instalado abre direto onde a pessoa usa
         if (window.Store.logado() && ls.get("bb_ultimo_painel", false)) return go("/painel", true);
