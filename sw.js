@@ -1,8 +1,8 @@
 // Service worker: offline + instalável. Troque VERSAO a cada atualização publicada.
-const VERSAO = "lkbarber-v6";
+const VERSAO = "lkbarber-v9";
 const ESCOPO = self.registration.scope; // "/" ou "/repo/" no GitHub Pages
 const ARQUIVOS = ["./", "index.html", "css/style.css", "js/config.js", "js/agenda.js", "js/store.js", "js/app.js", "js/landing.js",
-  "js/cliente.js", "js/painel.js", "js/admin.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
+  "js/cliente.js", "js/painel.js", "js/admin.js", "js/movimento.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "icons/maskable-512.png", "icons/apple-touch-icon.png"];
 
 self.addEventListener("install", e => { e.waitUntil(caches.open(VERSAO).then(c => c.addAll(ARQUIVOS)).then(() => self.skipWaiting())); });
 self.addEventListener("activate", e => {
@@ -17,7 +17,7 @@ self.addEventListener("fetch", e => {
     return;
   }
   if (url.hostname.endsWith("supabase.co") || url.pathname.includes("/rest/v1/") || url.pathname.includes("/auth/v1/")) return;
-  if (url.hostname.includes("fonts.g") || url.hostname === "cdnjs.cloudflare.com") {
+  if (url.hostname.includes("fonts.g") || url.hostname === "cdnjs.cloudflare.com" || url.hostname === "cdn.jsdelivr.net") {
     e.respondWith(caches.open(VERSAO).then(c => c.match(req).then(r => r || fetch(req).then(n => { c.put(req, n.clone()); return n; }))));
     return;
   }

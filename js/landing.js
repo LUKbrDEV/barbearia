@@ -27,7 +27,8 @@
     if (tr) { const passo = d => tr.scrollBy({ left: d * (tr.querySelector(".tela").offsetWidth + 16), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       $("#telaAnt").onclick = () => passo(-1); $("#telaProx").onclick = () => passo(1);
       tr.onkeydown = e => { if (e.key === "ArrowRight") passo(1); if (e.key === "ArrowLeft") passo(-1); }; }
-    U.planos().then(l => { const el = $("#lPlanos"); if (el && l.length) el.innerHTML = cartoesPlanos(l, "/cadastro", "Começar teste grátis"); }).catch(() => {});
+    U.planos().then(l => { const el = $("#lPlanos"); if (el && l.length) el.innerHTML = cartoesPlanos(l, "/cadastro", "Começar teste grátis"); if (window.ScrollTrigger) ScrollTrigger.refresh(); }).catch(() => {});
+    if (window.Movimento) requestAnimationFrame(() => window.Movimento.iniciar());
   }
   const dominio = () => location.host + (window.BASE || "/");
   // cartões de plano (usados aqui e na assinatura do painel)

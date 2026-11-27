@@ -97,6 +97,7 @@
     const p = partes(), r = p[0] || "";
     document.body.dataset.area = r === "painel" ? "painel" : r === "admin" ? "admin" : !r || r === "cadastro" ? "site" : "cliente";
     if (window.Painel) window.Painel.parar && window.Painel.parar();
+    if (window.Movimento) window.Movimento.parar();
     if (!window.Store.configurado) return naoConfigurado();
     // link de e-mail (confirmação/nova senha) que caiu na página inicial: leva para o painel, que faz o login
     if (!r && /access_token=|error_description=/.test(location.hash)) { history.replaceState({}, "", url("/painel") + location.hash); return window.Painel.render(); }
@@ -139,7 +140,7 @@
   // icones: { i192, i512, mask } (ícone enviado pela barbearia) ou nada (ícone do LKBarber)
   function manifestPara(nome, startPath, icones) {
     const o = location.origin + BASE.slice(0, -1), m = { name: nome, short_name: nome.slice(0, 24), start_url: o + startPath, scope: o + "/", id: o + startPath,
-      display: "standalone", orientation: "portrait", background_color: "#16181d", theme_color: "#16181d", lang: "pt-BR",
+      display: "standalone", orientation: "portrait", background_color: "#141210", theme_color: "#141210", lang: "pt-BR",
       icons: icones ? [{ src: icones.i192, sizes: "192x192", type: "image/png" }, { src: icones.i512, sizes: "512x512", type: "image/png" },
         { src: icones.mask, sizes: "512x512", type: "image/png", purpose: "maskable" }]
       : [{ src: o + "/icons/icon-192.png", sizes: "192x192", type: "image/png" }, { src: o + "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
