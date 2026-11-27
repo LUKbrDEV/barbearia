@@ -87,16 +87,18 @@
 
   // preços e limites dos planos (tabela "planos"); vale para novas assinaturas e trocas de plano
   function editarPlanos() {
-    const m = U.modal(`<h2>Planos</h2><p class="sub" style="margin-top:-6px">O novo preço vale para quem assinar ou trocar de plano a partir de agora. Assinaturas atuais mantêm o valor.</p>
+    const m = U.modal(`<h2>Planos</h2><p class="sub" style="margin-top:-6px">O novo preço vale para quem assinar ou trocar de plano a partir de agora. Assinaturas atuais mantêm o valor. Mínimo do Asaas: R$ 5,00.</p>
       <form id="fPl">${planos.map(p => `<div class="serv-ed form-grid" data-id="${esc(p.id)}">
         <label class="full">Nome<input name="nome" value="${esc(p.nome)}" maxlength="30" required></label>
-        <label>Preço/mês (R$)<input name="preco" type="number" inputmode="decimal" min="0" step="0.01" value="${esc(p.preco)}" required></label>
+        <label>Preço/mês (R$)<input name="preco" type="number" inputmode="decimal" min="5" step="0.01" value="${esc(p.preco)}" required></label>
         <label>Máx. barbeiros<input name="max" type="number" inputmode="numeric" min="1" step="1" value="${esc(p.max_prof ?? "")}" placeholder="ilimitado"></label>
         <label class="full">Descrição<input name="desc" value="${esc(p.descricao || "")}" maxlength="90"></label></div>`).join("")}
       <p class="erro" id="plErro"></p><div class="pilha"><button class="btn">Salvar planos</button><button type="button" class="btn btn-sec" data-fechar>Cancelar</button></div></form>`);
     m.querySelector("#fPl").onsubmit = async e => {
       e.preventDefault();
       try {
+        for (const el of m.querySelectorAll("[data-id]")) if (Number(el.querySelector("[name=preco]").value) < 5)
+          throw new Error("O Asaas só aceita cobranças a partir de R$ 5,00. Use R$ 5,00 ou mais em todos os planos.");
         for (const el of m.querySelectorAll("[data-id]")) {
           const v = n => el.querySelector(`[name=${n}]`).value;
           await S.salvarPlano({ id: el.dataset.id, nome: v("nome").trim(), preco: Number(v("preco")), max_prof: v("max") ? Number(v("max")) : null, descricao: v("desc").trim(), ativo: true });

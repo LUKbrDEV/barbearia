@@ -103,6 +103,7 @@ async function assinar(b, user, x) {
   if (!FORMAS.includes(forma)) throw new Erro("Escolha cartão, Pix ou boleto.");
   const planos = await db(`/planos?id=eq.${encodeURIComponent(String(x.plano ?? ""))}&ativo=eq.true&select=*`);
   const plano = planos[0]; if (!plano) throw new Erro("Plano indisponível.");
+  if (Number(plano.preco) < 5) throw new Erro(`O Asaas só aceita mensalidades a partir de R$ 5,00. O plano ${plano.nome} está com R$ ${Number(plano.preco).toFixed(2).replace(".", ",")}: ajuste o preço em /admin → Preços dos planos.`);
   if (plano.max_prof) {
     const ativos = await db(`/profissionais?barbearia_id=eq.${b.id}&ativo=eq.true&select=id`);
     if (ativos.length > plano.max_prof)
