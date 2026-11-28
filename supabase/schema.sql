@@ -1,23 +1,13 @@
--- ============================================================
--- LKBarber — banco multi-barbearia (Supabase)
--- Passo a passo completo no LEIAME.md. Resumo:
--- 1) SQL Editor → cole tudo → Run (pode rodar de novo sem perder dados).
--- 2) Authentication → Sign In / Providers → Email: deixe o cadastro de usuários LIGADO.
--- 3) Crie sua conta pelo site (/cadastro) e torne-se super admin:
---      insert into plataforma_admins (user_id)
---      select id from auth.users where email = 'SEU-EMAIL@exemplo.com';
--- ============================================================
+-- roda no SQL Editor do supabase, pode rodar de novo sem perder nada
 create extension if not exists pgcrypto;
 
--- ---------------- TABELAS ----------------
 create table if not exists plataforma_admins (user_id uuid primary key references auth.users on delete cascade);
 
--- Planos: você edita preço e limite em /admin (ou aqui). O valor cobrado vem daqui, nunca do navegador.
 create table if not exists planos (
   id text primary key check (id ~ '^[a-z0-9-]{2,30}$'),
   nome text not null,
   preco numeric(10,2) not null check (preco >= 0),
-  max_prof int check (max_prof is null or max_prof > 0),   -- null = ilimitado
+  max_prof int check (max_prof is null or max_prof > 0),
   descricao text default '',
   ordem int not null default 0,
   ativo boolean not null default true
@@ -39,16 +29,14 @@ create table if not exists barbearias (
   dono_email text,
   criado_em timestamptz not null default now()
 );
--- cobrança (Asaas)
 alter table barbearias add column if not exists asaas_customer_id text;
 alter table barbearias add column if not exists asaas_subscription_id text;
-alter table barbearias add column if not exists forma_pagamento text;           -- CREDIT_CARD | PIX | BOLETO
+alter table barbearias add column if not exists forma_pagamento text;
 alter table barbearias add column if not exists ultimo_pagamento_em timestamptz;
 create index if not exists barb_sub_idx on barbearias (asaas_subscription_id);
 
--- histórico de cobranças recebidas pelo webhook
 create table if not exists pagamentos (
-  id text primary key,                         -- id da cobrança no Asaas (pay_...)
+  id text primary key,
   barbearia_id uuid references barbearias on delete set null,
   valor numeric(10,2),
   status text,
@@ -56,7 +44,7 @@ create table if not exists pagamentos (
   vencimento date,
   pago_em date,
   fatura_url text,
-  creditado boolean not null default false,    -- já somou 1 mês na assinatura?
+  creditado boolean not null default false,
   atualizado_em timestamptz not null default now()
 );
 create table if not exists webhook_eventos (id text primary key, evento text, recebido_em timestamptz not null default now());
@@ -111,14 +99,13 @@ create index if not exists ag_prof_idx on agendamentos (prof_id, data);
 create table if not exists bloqueios (
   id uuid primary key default gen_random_uuid(),
   barbearia_id uuid not null references barbearias on delete cascade,
-  prof_id uuid references profissionais on delete cascade,   -- null = barbearia inteira
+  prof_id uuid references profissionais on delete cascade,
   data date not null,
-  ini time, fim time,                                          -- null = dia inteiro
+  ini time, fim time,
   motivo text default ''
 );
 create index if not exists blq_idx on bloqueios (barbearia_id, data);
 
--- ---------------- FUNÇÕES DE PERMISSÃO ----------------
 create or replace function is_super() returns boolean language sql stable security definer set search_path = public as $$
   select exists (select 1 from plataforma_admins where user_id = auth.uid()) $$;
 create or replace function papel_em(p_bid uuid) returns text language sql stable security definer set search_path = public as $$
@@ -126,14 +113,12 @@ create or replace function papel_em(p_bid uuid) returns text language sql stable
 create or replace function meu_prof(p_bid uuid) returns uuid language sql stable security definer set search_path = public as $$
   select prof_id from membros where user_id = auth.uid() and barbearia_id = p_bid $$;
 create or replace function hoje_br() returns date language sql stable as $$ select (now() at time zone 'America/Sao_Paulo')::date $$;
--- teste vence no dia; assinatura paga tem 3 dias de carência (boleto/Pix compensando)
 create or replace function liberada(b barbearias) returns boolean language sql stable as $$
   select b.status <> 'bloqueada' and (b.vence_em is null
     or (case when b.status = 'teste' then b.vence_em else b.vence_em + 3 end) >= hoje_br()) $$;
 create or replace function e_servidor() returns boolean language sql stable as $$
   select current_user in ('service_role', 'postgres', 'supabase_admin') $$;
 
--- ---------------- RLS ----------------
 alter table plataforma_admins enable row level security;
 alter table barbearias enable row level security;
 alter table profissionais enable row level security;
@@ -172,7 +157,6 @@ drop policy if exists bl_ins on bloqueios; create policy bl_ins on bloqueios for
 drop policy if exists bl_del on bloqueios; create policy bl_del on bloqueios for delete to authenticated
   using (papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
 
--- Dono não altera a própria assinatura (status, plano, vencimento, endereço): só o super admin.
 create or replace function proteger_assinatura() returns trigger language plpgsql as $$
 begin
   if not is_super() and not e_servidor() and (new.status is distinct from old.status or new.plano is distinct from old.plano
@@ -186,7 +170,6 @@ end $$;
 drop trigger if exists trg_proteger on barbearias;
 create trigger trg_proteger before update on barbearias for each row execute function proteger_assinatura();
 
--- Limite de barbeiros ativos por plano.
 create or replace function limite_profissionais() returns trigger language plpgsql security definer set search_path = public as $$
 declare v_max int; v_n int;
 begin
@@ -200,7 +183,6 @@ end $$;
 drop trigger if exists trg_limite on profissionais;
 create trigger trg_limite before insert or update on profissionais for each row execute function limite_profissionais();
 
--- ---------------- FUNÇÕES PÚBLICAS (cliente, sem login) ----------------
 create or replace function slug_disponivel(p_slug text) returns boolean language sql stable security definer set search_path = public as $$
   select not exists (select 1 from barbearias where slug = lower(p_slug)) $$;
 
@@ -238,7 +220,6 @@ begin
 
   perform pg_advisory_xact_lock(hashtext(b.id::text || p_data::text));
 
-  -- escolhe o profissional pedido, ou o livre com menos atendimentos no dia
   select p.* into v_prof from profissionais p
    where p.barbearia_id = b.id and p.ativo and (p_prof is null or p.id = p_prof)
      and extract(dow from p_data)::int = any(p.dias)
@@ -265,7 +246,6 @@ end $$;
 create or replace function status_agendamentos(p_ids uuid[]) returns table (id uuid, status text)
 language sql stable security definer set search_path = public as $$ select a.id, a.status from agendamentos a where a.id = any(p_ids) $$;
 
--- ---------------- FUNÇÕES DE CONTA (logado) ----------------
 create or replace function sou_super() returns boolean language sql stable security definer set search_path = public as $$ select is_super() $$;
 
 create or replace function meus_acessos() returns json language sql stable security definer set search_path = public as $$
@@ -286,14 +266,12 @@ begin
   return v_b;
 end $$;
 
--- Cadastro com confirmação de e-mail: os dados da barbearia vão junto com a conta (user_metadata.cad).
--- No primeiro login, em qualquer navegador ou aparelho, o painel chama esta função e a barbearia é criada.
 create or replace function criar_barbearia_pendente() returns json
 language plpgsql security definer set search_path = public as $$
 declare v_cad jsonb; v_id uuid;
 begin
   if auth.uid() is null then raise exception 'entre na sua conta'; end if;
-  if exists (select 1 from membros where user_id = auth.uid()) then return null; end if;   -- já tem barbearia
+  if exists (select 1 from membros where user_id = auth.uid()) then return null; end if;
   select raw_user_meta_data->'cad' into v_cad from auth.users where id = auth.uid();
   if v_cad is null or coalesce(v_cad->>'slug', '') = '' then return null; end if;
   v_id := criar_barbearia(coalesce(v_cad->>'nome', 'Minha barbearia'), v_cad->>'slug', coalesce(nullif(v_cad->>'nomeDono', ''), 'Dono'));
@@ -339,7 +317,6 @@ begin
   update profissionais set email = '' where id = p_prof;
 end $$;
 
--- ---------------- SUPER ADMIN ----------------
 create or replace function todas_barbearias() returns json language plpgsql stable security definer set search_path = public as $$
 begin
   if not is_super() then raise exception 'sem permissao'; end if;
@@ -351,9 +328,6 @@ begin
     order by b.criado_em desc), '[]'::json) from barbearias b);
 end $$;
 
--- ---------------- COBRANÇA: processamento do webhook do Asaas ----------------
--- Chamado só pela Edge Function asaas-webhook (chave secreta). Idempotente: o mesmo evento ou a
--- mesma cobrança nunca soma mês duas vezes (CONFIRMED e RECEIVED chegam para o mesmo pagamento).
 create or replace function processar_pagamento_asaas(p_evento_id text, p_evento text, p jsonb)
 returns text language plpgsql security definer set search_path = public as $$
 declare v_b barbearias; v_pg pagamentos; v_venc date;
@@ -410,8 +384,6 @@ end $$;
 revoke all on function processar_pagamento_asaas(text, text, jsonb), encerrar_assinatura_asaas(text, text) from public, anon, authenticated;
 grant execute on function processar_pagamento_asaas(text, text, jsonb), encerrar_assinatura_asaas(text, text) to service_role;
 
--- ---------------- ÍCONE DA BARBEARIA (Storage) ----------------
--- Bucket público "logos": logos/<barbearia_id>/icon-512.png etc. Só o dono grava na pasta da barbearia dele.
 do $do$ begin
   if exists (select 1 from information_schema.schemata where schema_name = 'storage') then
     insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -431,7 +403,6 @@ do $do$ begin
   end if;
 end $do$;
 
--- ---------------- GRANTS ----------------
 revoke all on function slug_disponivel(text), dados_publicos(text), horarios_ocupados(text, date, date),
   agendar(text, text, uuid, text, text, date, time), cancelar_agendamento(uuid, text), status_agendamentos(uuid[]) from public;
 grant execute on function slug_disponivel(text), dados_publicos(text), horarios_ocupados(text, date, date),
@@ -443,16 +414,11 @@ revoke all on function sou_super(), meus_acessos(), criar_barbearia(text, text, 
 grant execute on function sou_super(), meus_acessos(), criar_barbearia(text, text, text), profissionais_da_barbearia(uuid),
   gerar_convite(uuid), aceitar_convite(text), remover_acesso(uuid), todas_barbearias() to authenticated;
 
--- ---------------- PERMISSÕES DE ACESSO (Data API) ----------------
--- Projetos Supabase criados a partir de 30/05/2026 não liberam tabelas automaticamente:
--- cada papel recebe só o que o app usa. As regras de linha (RLS) acima continuam valendo por cima disto.
 grant usage on schema public to anon, authenticated, service_role;
 
--- visitante (cliente sem login): só lê os planos; o resto passa pelas funções públicas
 grant select on planos to anon;
 
--- usuário logado (dono, barbeiro, você)
-grant select, update on planos to authenticated;                 -- update só passa para o super admin (RLS)
+grant select, update on planos to authenticated;
 grant select, update on barbearias to authenticated;
 grant select, insert, update on profissionais to authenticated;
 grant select on membros to authenticated;
@@ -460,24 +426,19 @@ grant select, insert, update on agendamentos to authenticated;
 grant select, insert, delete on bloqueios to authenticated;
 grant select on pagamentos to authenticated;
 
--- servidor (Edge Functions com a chave secreta)
 grant all on all tables in schema public to service_role;
 
--- funções auxiliares usadas dentro das regras de segurança
 grant execute on function is_super(), papel_em(uuid), meu_prof(uuid), hoje_br(), liberada(barbearias), e_servidor()
   to anon, authenticated, service_role;
 
--- ============================================================
--- PRODUTOS À VENDA E VENDAS (registradas pelo barbeiro)
--- ============================================================
 create table if not exists produtos (
   id uuid primary key default gen_random_uuid(),
   barbearia_id uuid not null references barbearias on delete cascade,
   nome text not null check (char_length(nome) between 1 and 60),
   descricao text default '',
   preco numeric(10,2) not null default 0 check (preco >= 0),
-  foto_v bigint,                                            -- versão da foto (logos/<barbearia>/prod-<id>.webp)
-  estoque int check (estoque is null or estoque >= 0),       -- null = não controla estoque
+  foto_v bigint,
+  estoque int check (estoque is null or estoque >= 0),
   ativo boolean not null default true,
   ordem int not null default 0,
   criado_em timestamptz not null default now()
@@ -490,7 +451,7 @@ create table if not exists vendas (
   prof_id uuid references profissionais on delete set null,
   produto_id uuid references produtos on delete set null,
   produto_nome text not null,
-  preco numeric(10,2) not null,                              -- preço unitário no momento da venda
+  preco numeric(10,2) not null,
   qtd int not null default 1 check (qtd between 1 and 99),
   agendamento_id uuid references agendamentos on delete set null,
   data date not null default hoje_br(),
@@ -507,7 +468,6 @@ drop policy if exists pr_del on produtos; create policy pr_del on produtos for d
 drop policy if exists vd_sel on vendas; create policy vd_sel on vendas for select to authenticated
   using (is_super() or papel_em(barbearia_id) = 'dono' or (papel_em(barbearia_id) = 'barbeiro' and prof_id = meu_prof(barbearia_id)));
 
--- Registra a venda e baixa o estoque no mesmo passo (dois barbeiros não vendem o último item juntos).
 create or replace function registrar_venda(p_produto uuid, p_qtd int, p_ag uuid, p_prof uuid) returns uuid
 language plpgsql security definer set search_path = public as $$
 declare v_p produtos; v_papel text; v_prof uuid; v_id uuid; v_ag agendamentos;
@@ -545,7 +505,6 @@ begin
   delete from vendas where id = p_id;
 end $$;
 
--- página pública: agora também devolve os produtos ativos (sem estoque exato, só se esgotou)
 create or replace function dados_publicos(p_slug text) returns json language sql stable security definer set search_path = public as $$
   select json_build_object(
     'b', json_build_object('id', b.id, 'slug', b.slug, 'nome', b.nome, 'status', b.status, 'vence_em', b.vence_em, 'config', b.config),

@@ -1,19 +1,11 @@
-// @ts-nocheck  (JavaScript puro dentro de .ts: o Deno não precisa checar tipos)
-// LKBarber — Edge Function "assinatura"
-// Chamada pelo painel do dono (com o login dele). Fala com o Asaas usando a SUA chave de API,
-// que fica só aqui no servidor. Ações: info, assinar (também troca plano/forma), cancelar.
-//
-// Segredos (Supabase → Edge Functions → Secrets):
-//   ASAAS_API_KEY   chave da API do Asaas ($aact_...)
-//   ASAAS_URL       https://api-sandbox.asaas.com/v3 (testes) ou https://api.asaas.com/v3 (produção)
-// Deploy: supabase functions deploy assinatura --no-verify-jwt   (o login é conferido aqui dentro)
+// @ts-nocheck
+// deploy: supabase functions deploy assinatura --no-verify-jwt
 
 const ASAAS_URL = Deno.env.get("ASAAS_URL") ?? "https://api-sandbox.asaas.com/v3";
 const ASAAS_KEY = Deno.env.get("ASAAS_API_KEY") ?? "";
 const SB_URL = Deno.env.get("SUPABASE_URL") ?? "";
-// chave interna do Supabase: o nome muda conforme a idade do projeto, então tentamos todos
 const SB_KEY = (() => {
-  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { /* tenta os outros nomes */ }
+  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { }
   return Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("LK_SECRET_KEY") || "";
 })();
 const FORMAS = ["CREDIT_CARD", "PIX", "BOLETO"];
@@ -26,10 +18,9 @@ const CORS = {
 const resp = (obj, status = 200) => new Response(JSON.stringify(obj), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 class Erro extends Error { constructor(msg, status = 400) { super(msg); this.status = status; } }
 
-// ---------- Supabase (com a chave secreta: ignora RLS, por isso tudo é conferido aqui) ----------
 function sbHeaders(extra = {}) {
   const h = { apikey: SB_KEY, "Content-Type": "application/json", ...extra };
-  if (!SB_KEY.startsWith("sb_")) h.Authorization = "Bearer " + SB_KEY; // chave legada (JWT)
+  if (!SB_KEY.startsWith("sb_")) h.Authorization = "Bearer " + SB_KEY;
   return h;
 }
 async function db(path, opt = {}) {
@@ -46,17 +37,16 @@ async function usuario(req) {
   return await r.json();
 }
 
-// ---------- Asaas ----------
 async function asaas(path, method = "GET", body) {
   const r = await fetch(ASAAS_URL + path, {
     method, body: body ? JSON.stringify(body) : undefined,
     headers: { access_token: ASAAS_KEY, "Content-Type": "application/json", "User-Agent": "LKBarber" },
   });
-  const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch (_) { /* sem corpo */ }
+  const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch (_) { }
   if (!r.ok) throw new Erro((j && j.errors && j.errors[0] && j.errors[0].description) || "Erro no Asaas (" + r.status + ").");
   return j;
 }
-const hojeBR = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date()); // AAAA-MM-DD
+const hojeBR = () => new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
 const soDig = s => String(s ?? "").replace(/\D/g, "");
 function cpfCnpjValido(v) {
   const d = soDig(v);
@@ -75,7 +65,6 @@ function cpfCnpjValido(v) {
 const fatura = p => ({ id: p.id, valor: p.value, status: p.status, forma: p.billingType, vencimento: p.dueDate,
   pago_em: p.paymentDate || p.confirmedDate || null, url: p.invoiceUrl });
 
-// ---------- ações ----------
 async function carregar(user, bid) {
   if (!/^[0-9a-f-]{36}$/i.test(bid ?? "")) throw new Erro("Barbearia inválida.");
   const [m, sup, b] = await Promise.all([
@@ -111,7 +100,6 @@ async function assinar(b, user, x) {
   }
   const descricao = `LKBarber ${plano.nome} - ${b.nome}`.slice(0, 500);
 
-  // cliente no Asaas (o pagador é a barbearia)
   let cliente = b.asaas_customer_id;
   if (!cliente) {
     if (!cpfCnpjValido(x.cpfCnpj)) throw new Erro("Informe um CPF ou CNPJ válido do responsável pela barbearia.");
@@ -122,10 +110,8 @@ async function assinar(b, user, x) {
 
   let sub = b.asaas_subscription_id;
   if (sub) {
-    // troca de plano e/ou forma: vale para as próximas cobranças e as pendentes
     await asaas(`/subscriptions/${sub}`, "PUT", { value: Number(plano.preco), billingType: forma, description: descricao, updatePendingPayments: true });
   } else {
-    // primeira cobrança no fim do teste (ou hoje, se já venceu); pagar antes não faz perder dias
     const hoje = hojeBR(), venc = b.vence_em && b.vence_em > hoje ? b.vence_em : hoje;
     const s = await asaas("/subscriptions", "POST", { customer: cliente, billingType: forma, value: Number(plano.preco), nextDueDate: venc,
       cycle: "MONTHLY", description: descricao, externalReference: b.id });
@@ -133,7 +119,6 @@ async function assinar(b, user, x) {
   }
   await db(`/barbearias?id=eq.${b.id}`, { method: "PATCH", body: { plano: plano.id, asaas_customer_id: cliente, asaas_subscription_id: sub, forma_pagamento: forma } });
 
-  // link da fatura em aberto: o dono paga na página segura do Asaas (cartão nunca passa pelo LKBarber)
   const p = await asaas(`/subscriptions/${sub}/payments?limit=12`);
   const aberta = (p.data ?? []).filter(f => ["PENDING", "OVERDUE"].includes(f.status)).sort((a, c) => String(a.dueDate).localeCompare(String(c.dueDate)))[0];
   return { ok: true, plano: plano.id, url: aberta ? aberta.invoiceUrl : null };

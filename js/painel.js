@@ -1,4 +1,3 @@
-// Painel /painel — dono (tudo da barbearia) e barbeiro (só a própria agenda).
 {
   const U = window.UI, S = window.Store, A = window.Agenda, P = window.PLATAFORMA;
   const { esc, money, $, ls, fmtData, durTxt, wa, DIAS, cap } = U;
@@ -16,7 +15,7 @@
   async function render() {
     parar(); U.manifestPadrao(); document.title = "Painel · " + P.nome;
     U.rodapeHTML(`<span>${esc(P.nome)}</span>`);
-    if (location.hash.length > 20) { // voltou de um link de e-mail (confirmação ou nova senha)
+    if (location.hash.length > 20) {
       try { const tipo = await S.capturarRetornoAuth(); if (tipo === "recovery") return novaSenha(); if (tipo) U.toast("E-mail confirmado!"); }
       catch (e) { U.toast(e.message); }
     }
@@ -24,16 +23,15 @@
     U.moldura({ marca: "Painel", marcaHref: "/painel" });
     app().innerHTML = `<p class="vazio band">Carregando…</p>`;
     try {
-      // convites e cadastros que ficaram pendentes (confirmação de e-mail)
       const conv = new URLSearchParams(location.search).get("convite") || ls.get("bb_convite_pendente", "");
       if (conv) { try { await S.aceitarConvite(conv); U.toast("Convite aceito!"); } catch (e) { U.toast(e.message); } ls.set("bb_convite_pendente", ""); if (location.search) history.replaceState({}, "", U.url("/painel")); }
       let acessos = await S.acessos();
       avisoCad = "";
-      if (!acessos.length) { // barbearia informada no cadastro (vale em qualquer navegador/aparelho)
+      if (!acessos.length) {
         let criou = null;
         try { criou = await S.criarPendente(); }
         catch (e) { avisoCad = /slug|uso/i.test(e.message) ? "O endereço escolhido no cadastro foi usado por outra barbearia. Crie a sua com outro endereço." : e.message; }
-        const pend = ls.get("bb_cad_pendente", null); // cadastros antigos, feitos antes desta versão
+        const pend = ls.get("bb_cad_pendente", null);
         if (!criou && !avisoCad && pend) { try { await S.criarBarbearia(pend); criou = true; } catch (e) { avisoCad = e.message; } }
         ls.set("bb_cad_pendente", null);
         if (criou) { acessos = await S.acessos(); U.toast("Barbearia criada! Configure seus serviços e horários."); }
@@ -97,7 +95,6 @@
   }
   function sair() { S.sair(); ls.set("bb_ultimo_painel", false); ls.set("bb_bid", null); ctx = null; U.go("/painel"); }
 
-  // ---------- moldura do painel ----------
   function desenhar() {
     parar();
     const tabs = dono()
@@ -151,7 +148,6 @@
     };
   }
 
-  // ---------- AGENDA ----------
   async function agenda() {
     box().innerHTML = `<div class="dia-nav"><button class="btn btn-sec" id="dAnt" aria-label="Dia anterior">‹</button>
       <input type="date" id="dSel" value="${dia}" aria-label="Data"><button class="btn btn-sec" id="dProx" aria-label="Próximo dia">›</button></div>
@@ -239,7 +235,6 @@
     };
   }
 
-  // ---------- BLOQUEIOS / FOLGAS ----------
   async function bloq() {
     const profs = ctx.profs.filter(p => p.ativo);
     box().innerHTML = `<form id="fBlq" class="form-grid">
@@ -268,7 +263,6 @@
     } catch (err) { U.toast(err.message); }
   }
 
-  // ---------- RELATÓRIOS / GANHOS ----------
   async function rel() {
     const PER = { "0": "Hoje", "7": "7 dias", "mes": "Este mês", "30": "30 dias", "90": "90 dias" };
     box().innerHTML = `<div class="seg" id="rPer">${Object.entries(PER).map(([k, t]) => `<button class="btn btn-mini ${periodo === k ? "" : "btn-sec"}" data-p="${k}">${t}</button>`).join("")}</div><div id="rOut"><p class="vazio">Carregando…</p></div>`;
@@ -310,7 +304,6 @@
     $("#rOut").innerHTML = html;
   }
 
-  // ---------- CLIENTES ----------
   async function cli() {
     box().innerHTML = `<input class="busca" id="cBusca" type="search" placeholder="Buscar cliente por nome ou telefone"><div id="cLista"><p class="vazio">Carregando…</p></div>`;
     let ags; try { ags = await S.listar(ctx.bid, A.addDays(U.hoje(), -365), A.addDays(U.hoje(), 90), dono() ? undefined : ctx.prof_id); } catch (err) { U.toast(err.message); return; }
@@ -335,7 +328,6 @@
     desenharL("");
   }
 
-  // ---------- EQUIPE (dono) ----------
   async function equipe() {
     const plano = (await U.planos().catch(() => [])).find(p => p.id === ctx.b.plano), ativos = ctx.profs.filter(p => p.ativo).length;
     box().innerHTML = `<p class="sub" style="margin-top:0">Plano ${esc(plano ? plano.nome : ctx.b.plano)}: ${ativos} de ${plano && plano.max_prof ? plano.max_prof : "∞"} barbeiro(s) ativo(s).</p>
@@ -386,7 +378,6 @@
     b.querySelector("#cpConv").onclick = () => U.copiar(link);
   }
 
-  // ---------- SERVIÇOS (dono) ----------
   function serv() {
     let lista = JSON.parse(JSON.stringify(cfg().servicos));
     const desenharS = () => {
@@ -412,7 +403,6 @@
           catch (er) { U.toast(er.message); btn.disabled = false; btn.textContent = "Adicionar foto"; }
         });
       };
-      // a foto já vale para o serviço salvo (sem precisar tocar em Salvar); serviço novo ainda não salvo espera o Salvar
       async function fotoNoSalvo(id, foto) {
         const salvos = cfg().servicos; if (!salvos.some(x => x.id === id)) return U.toast("Foto pronta. Toque em Salvar serviços.");
         await salvarCfg({ servicos: salvos.map(x => x.id === id ? Object.assign({}, x, { foto }) : x) });
@@ -426,13 +416,11 @@
     };
     desenharS();
   }
-  // ---------- FOTOS (serviços e produtos) ----------
   function escolherArquivo(cb) {
     const inp = document.createElement("input"); inp.type = "file"; inp.accept = "image/png,image/jpeg,image/webp";
     inp.onchange = () => { const f = inp.files[0]; if (!f) return; if (f.size > 12 * 1024 * 1024) return U.toast("Imagem muito grande (máximo 12 MB)."); cb(f); };
     inp.click();
   }
-  // recorta o centro em quadrado e comprime (WebP ~30–60 KB); o celular não sobe a foto original pesada
   async function fotoQuadrada(arq, tam) {
     const img = await carregarImagem(arq), lado = Math.min(img.width, img.height);
     const c = document.createElement("canvas"); c.width = c.height = tam; const g = c.getContext("2d"); g.imageSmoothingQuality = "high";
@@ -442,7 +430,6 @@
     return new Blob([b], { type: "image/webp" === b.type ? "image/webp" : "image/jpeg" });
   }
 
-  // capa: lado maior até 1600px, mantém o formato da foto, WebP ~150–300 KB (limite do armazenamento: 1 MB)
   async function fotoCapa(arq) {
     const img = await carregarImagem(arq), k = Math.min(1, 1600 / Math.max(img.width, img.height));
     const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
@@ -455,7 +442,6 @@
     throw new Error("A foto ficou grande demais. Tente outra imagem.");
   }
 
-  // ---------- PRODUTOS (dono) ----------
   const temProdutos = () => (ctx.produtos || []).some(p => p.ativo);
   const fotoProd = p => p.foto_v ? S.fotoURL(ctx.bid, "prod-" + p.id + ".webp", p.foto_v) : null;
   async function prod() {
@@ -504,7 +490,6 @@
       } catch (er) { err.textContent = er.message; btn.disabled = false; btn.textContent = "Salvar produto"; }
     };
   }
-  // registrar venda (no atendimento ou avulsa)
   function vender(agId) {
     const l = (ctx.produtos || []).filter(p => p.ativo); if (!l.length) return U.toast("Cadastre produtos em Mais → Produtos à venda.");
     let sel = (l.find(p => p.estoque !== 0) || {}).id, qtd = 1;
@@ -533,7 +518,6 @@
     catch (err) { U.toast(err.message); }
   }
 
-  // ---------- HORÁRIOS (dono) ----------
   function hor() {
     const c = cfg(), H = JSON.parse(JSON.stringify(c.horarios)), ORDEM = [1, 2, 3, 4, 5, 6, 0];
     const cartao = d => { const h = H[d], pausa = !!(h.almocoIni || h.almocoFim || h._pausa);
@@ -574,7 +558,6 @@
     };
   }
 
-  // ---------- ASSINATURA (dono) — cobrança recorrente pelo Asaas ----------
   const FORMAS = { CREDIT_CARD: "Cartão de crédito", PIX: "Pix", BOLETO: "Boleto" };
   const ST_FAT = { PENDING: ["Em aberto", "agendado"], OVERDUE: ["Vencida", "cancelado"], RECEIVED: ["Paga", "concluido"], CONFIRMED: ["Paga", "concluido"],
     RECEIVED_IN_CASH: ["Paga", "concluido"], REFUNDED: ["Estornada", "cancelado"], REFUND_REQUESTED: ["Estorno pedido", "cancelado"],
@@ -655,7 +638,6 @@
       } catch (er) { err.textContent = er.message; btn.disabled = false; rot(); }
     };
   }
-  // o webhook do Asaas libera a barbearia; aqui só esperamos a confirmação aparecer
   async function aguardarPagamento() {
     const antes = ctx.b.vence_em; aba = "assin"; desenhar();
     for (let i = 0; i < 6; i++) {
@@ -665,8 +647,6 @@
     if (aba === "assin") U.toast("Assim que o Asaas confirmar, a assinatura atualiza sozinha. Pix e cartão costumam levar segundos; boleto, até 3 dias úteis.");
   }
 
-  // ---------- ÍCONE DA BARBEARIA ----------
-  // Gera 3 PNGs no próprio navegador: 512 e 192 (ícone e topo) e 512 "maskable" (Android recorta em círculo/gota).
   function carregarImagem(arq) {
     return new Promise((ok, falha) => { const img = new Image(); img.onload = () => ok(img); img.onerror = () => falha(new Error("Não consegui abrir essa imagem.")); img.src = URL.createObjectURL(arq); });
   }
@@ -718,7 +698,6 @@
     inp.click();
   }
 
-  // ---------- AJUSTES (dono) ----------
   function aj() {
     const c = cfg(), link = U.abs("/" + ctx.b.slug);
     const ic = U.iconesDe(ctx.bid, c.logo);
@@ -751,7 +730,6 @@
       <button class="btn btn-sec" id="ajNotif">Ativar notificações</button>
       <h2 style="margin-top:28px">Backup</h2><button class="btn btn-sec" id="ajExp">Baixar agendamentos (CSV)</button>`;
     $("#ajIcone").onclick = escolherIcone;
-    // capa: prévia ao vivo do escurecimento; a foto é reduzida e comprimida no próprio celular antes de subir
     const prevCapa = $("#capaPrev"), opIn = $("#capaOp"), btSalvarOp = $("#ajCapaSalvar");
     opIn.oninput = () => { prevCapa.style.setProperty("--capa-op", opIn.value / 100); $("#capaOpV").textContent = opIn.value + "%"; if (capa) btSalvarOp.hidden = Number(opIn.value) === esc0; };
     btSalvarOp.onclick = async () => { await salvarCfg({ capa: Object.assign({}, c.capa, { escurecer: Number(opIn.value) }) }); aj(); };

@@ -1,4 +1,3 @@
-// Lógica pura de datas e horários (sem DOM) — testável no Node.
 (function (root) {
   const pad = n => String(n).padStart(2, "0");
   const toMin = hm => { if (!hm) return null; const [h, m] = String(hm).slice(0, 5).split(":").map(Number); return h * 60 + m; };
@@ -10,8 +9,6 @@
   const dow = s => parseYMD(s).getDay();
   const trabalha = (prof, data) => !prof || !prof.dias || prof.dias.includes(dow(data));
 
-  // busy: [{prof:id|null, data, ini:"HH:MM"|"", fim}]  prof null = vale para todos; ini "" = dia inteiro
-  // prof: {id, dias:[0..6]} opcional — calcula só para esse profissional
   function slotsDoDia(cfg, data, dur, busy, agora, prof) {
     const h = cfg.horarios[dow(data)];
     if (!h || !h.aberto || !trabalha(prof, data)) return { fechado: true, slots: [] };
@@ -33,7 +30,6 @@
     return { fechado: false, slots };
   }
 
-  // Junta a agenda de vários profissionais: um horário está livre se algum deles estiver livre.
   function slotsEquipe(cfg, data, dur, busy, agora, profs) {
     const rs = profs.map(p => [p.id, slotsDoDia(cfg, data, dur, busy, agora, p)]);
     const abertos = rs.filter(([, r]) => !r.fechado);
@@ -47,13 +43,12 @@
     return { fechado: false, slots: [...mapa.values()].sort((a, b) => a.hora.localeCompare(b.hora)) };
   }
 
-  // Assinatura efetiva: teste vencido conta como bloqueada.
   function statusEfetivo(b, hoje) {
     if (!b) return "inexistente";
     if (b.status === "bloqueada") return "bloqueada";
     if (b.vence_em && b.vence_em < hoje) {
       if (b.status === "teste") return "teste_vencido";
-      return addDays(b.vence_em, 3) >= hoje ? "carencia" : "vencida"; // 3 dias de carência (igual ao banco)
+      return addDays(b.vence_em, 3) >= hoje ? "carencia" : "vencida"; // 3 dias de carência, igual no banco
     }
     return b.status;
   }

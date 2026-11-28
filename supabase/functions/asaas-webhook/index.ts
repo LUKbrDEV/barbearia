@@ -1,17 +1,10 @@
-// @ts-nocheck  (JavaScript puro dentro de .ts: o Deno não precisa checar tipos)
-// LKBarber — Edge Function "asaas-webhook"
-// O Asaas chama esta URL a cada pagamento. Ela confere o token e repassa ao banco
-// (função processar_pagamento_asaas), que soma 1 mês na assinatura de forma idempotente.
-//
-// Segredo: ASAAS_WEBHOOK_TOKEN = o mesmo "Token de autenticação" cadastrado no webhook do Asaas (32+ caracteres).
-// Deploy: supabase functions deploy asaas-webhook --no-verify-jwt   (quem chama é o Asaas, sem login)
-// URL para cadastrar no Asaas: https://SEU-PROJETO.supabase.co/functions/v1/asaas-webhook
+// @ts-nocheck
+// deploy: supabase functions deploy asaas-webhook --no-verify-jwt
 
 const TOKEN = Deno.env.get("ASAAS_WEBHOOK_TOKEN") ?? "";
 const SB_URL = Deno.env.get("SUPABASE_URL") ?? "";
-// chave interna do Supabase: o nome muda conforme a idade do projeto, então tentamos todos
 const SB_KEY = (() => {
-  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { /* tenta os outros nomes */ }
+  try { const k = JSON.parse(Deno.env.get("SUPABASE_SECRET_KEYS") ?? "{}").default; if (k) return k; } catch (_) { }
   return Deno.env.get("SUPABASE_SECRET_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("LK_SECRET_KEY") || "";
 })();
 
@@ -19,7 +12,7 @@ async function sha256(s) { return new Uint8Array(await crypto.subtle.digest("SHA
 async function tokenOk(recebido) {
   if (!TOKEN || !recebido) return false;
   const [a, b] = await Promise.all([sha256(recebido), sha256(TOKEN)]);
-  let dif = 0; for (let i = 0; i < a.length; i++) dif |= a[i] ^ b[i];   // comparação em tempo constante
+  let dif = 0; for (let i = 0; i < a.length; i++) dif |= a[i] ^ b[i];
   return dif === 0;
 }
 async function rpc(fn, body) {
@@ -46,7 +39,7 @@ Deno.serve(async req => {
     console.log(tipo, ev.payment?.id ?? ev.subscription?.id ?? "", r);
     return Response.json({ ok: true, r });
   } catch (e) {
-    // erro do nosso lado: devolve 500 para o Asaas tentar de novo (o processamento é idempotente)
+    // devolve 500 pro asaas tentar de novo
     console.error(tipo, e.message);
     return new Response("erro", { status: 500 });
   }

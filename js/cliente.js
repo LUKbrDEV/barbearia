@@ -1,9 +1,8 @@
-// Página pública de cada barbearia: /slug, /slug/agendar, /slug/meus, /slug/info
 {
   const U = window.UI, S = window.Store, A = window.Agenda, P = window.PLATAFORMA;
   const { esc, money, $, ls, fmtData, durTxt, wa, DIAS } = U;
   const app = () => $("#app");
-  let atual = null; // { slug, b, cfg, profs, carregado }
+  let atual = null;
   const st = { serv: null, prof: "", dia: null, hora: null, busy: [] };
 
   async function carregar(slug) {
@@ -45,7 +44,6 @@
       ${atual.cfg.whatsapp ? `<a class="btn btn-ok" target="_blank" rel="noopener" href="${esc(wa(atual.cfg.whatsapp, "Olá! Quero agendar um horário."))}">Agendar pelo WhatsApp</a>` : ""}</div>`;
   }
 
-  // ---------- INÍCIO ----------
   function abertoAgora(cfg) {
     const n = new Date(), h = cfg.horarios[n.getDay()], m = n.getHours() * 60 + n.getMinutes();
     if (!h || !h.aberto || m < A.toMin(h.abre) || m >= A.toMin(h.fecha)) return false;
@@ -90,12 +88,10 @@
     } catch {}
   }
 
-  // ---------- FOTOS E VITRINE ----------
   const fotoServ = s => s.foto && s.foto.v ? S.fotoURL(atual.b.id, "serv-" + s.id + ".webp", s.foto.v) : null;
   const fotoProd = p => p.foto_v ? S.fotoURL(atual.b.id, "prod-" + p.id + ".webp", p.foto_v) : null;
-  // toque na miniatura abre a foto grande (sem selecionar o serviço)
   function ligarZoom(raiz) {
-    if (!raiz || raiz._zoom) return; raiz._zoom = true;   // um ouvinte só por elemento
+    if (!raiz || raiz._zoom) return; raiz._zoom = true;
     raiz.addEventListener("click", e => {
       const z = e.target.closest("[data-zoom]"); if (!z) return;
       e.preventDefault(); e.stopPropagation();
@@ -112,7 +108,6 @@
           ${p.esgotado ? `<span class="tag cancelado">Esgotado</span>` : zap ? `<a class="btn btn-mini btn-ok" target="_blank" rel="noopener" href="${esc(wa(zap, `Olá! Quero reservar: ${p.nome} (${money(p.preco)}). Retiro na barbearia.`))}">Reservar</a>` : `<small>Disponível na barbearia</small>`}</div>`; }).join("")}</div></div>`;
   }
 
-  // ---------- AGENDAR ----------
   async function agendar() {
     const { cfg, profs } = atual, varios = profs.length > 1;
     let n = 1;
@@ -158,7 +153,7 @@
   function desenharDias() {
     const h0 = U.hoje(); let html = "";
     for (let i = 0; i < atual.cfg.diasAgenda; i++) {
-      const d = A.addDays(h0, i), dt = A.parseYMD(d), rr = calc(d), fechado = rr.fechado || !rr.slots.some(x => x.livre); // fechado ou lotado
+      const d = A.addDays(h0, i), dt = A.parseYMD(d), rr = calc(d), fechado = rr.fechado || !rr.slots.some(x => x.livre);
       html += `<label class="op ${fechado ? "fechado" : ""}"><input type="radio" name="dia" value="${d}" ${st.dia === d ? "checked" : ""}><span><small>${i === 0 ? "hoje" : i === 1 ? "amanhã" : dt.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "")}</small><b>${dt.getDate()}</b><small>${dt.toLocaleDateString("pt-BR", { month: "short" }).replace(".", "")}</small></span></label>`;
     }
     $("#escDia").innerHTML = html;
@@ -216,7 +211,6 @@
     b.querySelector("#mOk").onclick = () => U.go("/" + atual.slug + "/meus");
   }
 
-  // ---------- MEUS ----------
   async function meus() {
     app().innerHTML = `<div class="band"><h1 class="titulo-pag">Meus horários</h1><div id="listaMeus"><p class="vazio">Carregando…</p></div></div>`;
     const box = $("#listaMeus"), todos = ls.get("bb_meus", []);
@@ -254,7 +248,6 @@
     };
   }
 
-  // ---------- INFO ----------
   function info() {
     const { cfg } = atual, maps = cfg.mapsUrl || (cfg.endereco ? "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(cfg.endereco) : "");
     app().innerHTML = `<div class="band"><h1 class="titulo-pag">Informações</h1><ul class="info-lista">

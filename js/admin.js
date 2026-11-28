@@ -1,4 +1,3 @@
-// /admin — administração da plataforma (você): barbearias, planos, liberar e bloquear.
 {
   const U = window.UI, S = window.Store, A = window.Agenda, P = window.PLATAFORMA;
   const { esc, money, $, fmtData } = U;
@@ -85,7 +84,6 @@
   }
   async function acao(id, patch, msg) { try { await S.atualizarAssinatura(id, patch); U.toast(msg); carregar(); } catch (e) { U.toast(e.message); } }
 
-  // preços e limites dos planos (tabela "planos"); vale para novas assinaturas e trocas de plano
   function editarPlanos() {
     const m = U.modal(`<h2>Planos</h2><p class="sub" style="margin-top:-6px">O novo preço vale para quem assinar ou trocar de plano a partir de agora. Assinaturas atuais mantêm o valor. Mínimo do Asaas: R$ 5,00.</p>
       <form id="fPl">${planos.map(p => `<div class="serv-ed form-grid" data-id="${esc(p.id)}">

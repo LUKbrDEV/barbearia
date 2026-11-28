@@ -1,10 +1,8 @@
-// Site de vendas da plataforma (/) e cadastro de barbearias e barbeiros (/cadastro).
 {
   const U = window.UI, S = window.Store, P = window.PLATAFORMA;
   const { esc, money, $ } = U;
   const app = () => $("#app");
 
-  // O conteúdo da página de vendas está no index.html (para Google e prévia de links). Aqui só reaproveitamos.
   const LANDING_HTML = (() => { const el = document.getElementById("landing");
     return el ? el.outerHTML.replace(/href="[^"]*" data-link-l="([^"]*)"/g, 'href="$1" data-link') : ""; })();
 
@@ -20,9 +18,7 @@
     document.querySelectorAll(".dominio").forEach(el => el.textContent = dominio());
     const wa = $("#waVendas");
     if (wa) { if (P.suporteWhatsapp) wa.href = U.wa(P.suporteWhatsapp, "Olá! Quero saber mais sobre o " + P.nome + "."); else wa.hidden = true; }
-    // barbearia de exemplo: o link só aparece se ela existir de verdade
     if (P.demoSlug) S.publico(P.demoSlug).then(d => { const l = $("#demoLink"); if (d && l) { l.hidden = false; l.setAttribute("href", U.url("/" + P.demoSlug)); l.dataset.raw = "/" + P.demoSlug; l.setAttribute("data-link", ""); } }).catch(() => {});
-    // carrossel das telas
     const tr = $("#telasTrilho");
     if (tr) { const passo = d => tr.scrollBy({ left: d * (tr.querySelector(".tela").offsetWidth + 16), behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
       $("#telaAnt").onclick = () => passo(-1); $("#telaProx").onclick = () => passo(1);
@@ -31,7 +27,6 @@
     if (window.Movimento) requestAnimationFrame(() => window.Movimento.iniciar());
   }
   const dominio = () => location.host + (window.BASE || "/");
-  // cartões de plano (usados aqui e na assinatura do painel)
   function cartoesPlanos(l, href, txt, atual) {
     const meio = Math.floor((l.length - 1) / 2);
     return l.map((p, i) => { const dest = atual ? p.id === atual : i === meio && l.length > 2;
@@ -82,8 +77,6 @@
       const btn = $("#cadBtn"); btn.disabled = true; btn.textContent = "Criando…";
       try {
         if (!(await S.slugLivre(d.slug))) throw new Error("Esse endereço já está em uso.");
-        // os dados da barbearia vão junto com a conta: se o e-mail precisar ser confirmado
-        // (mesmo abrindo o link em outro navegador ou no celular), ela é criada no primeiro login
         const r = logado ? { pendente: false } : await S.criarConta(d.email, d.senha, { cad: { nome: d.nome, slug: d.slug, nomeDono: d.nomeDono } });
         if (r.pendente) {
           U.ls.set("bb_cad_pendente", { nome: d.nome, slug: d.slug, nomeDono: d.nomeDono });

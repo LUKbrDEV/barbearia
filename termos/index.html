@@ -112,7 +112,7 @@
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="poste" viewBox="0 0 24 24"><rect x="8" y="3" width="8" height="18" rx="4" fill="#fff"/><path d="M8 9l8-4v3l-8 4zM8 15l8-4v3l-8 4z" fill="#c8102e"/><path d="M8 12l8-4v1.5l-8 4z" fill="#1b3a6b"/><rect x="6.5" y="2" width="11" height="2.5" rx="1.2" fill="#cfd3da"/><rect x="6.5" y="19.5" width="11" height="2.5" rx="1.2" fill="#cfd3da"/></symbol></svg>
 <script src="../js/config.js"></script>
 <script>
-{ // preenche os dados do responsável a partir do js/config.js
+{ // puxa os dados do config.js
   const P = window.PLATAFORMA || {}, dig = s => String(s || "").replace(/\D/g, "");
   const txt = { responsavel: P.responsavel || "o responsável pelo LKBarber", documento: P.documento ? " (CPF/CNPJ " + P.documento + ")" : "",
     por_responsavel: P.responsavel ? "por " + P.responsavel : "pelo responsável indicado no contato ao final desta página",

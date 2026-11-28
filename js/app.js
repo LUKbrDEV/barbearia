@@ -1,4 +1,3 @@
-// Núcleo: utilidades de interface, roteador por caminho e PWA.
 {
   const A = window.Agenda, P = window.PLATAFORMA;
   const $ = s => document.querySelector(s);
@@ -14,10 +13,9 @@
   const wa = (num, txt) => { let n = soDig(num); if (n && n.length <= 11) n = "55" + n; return "https://wa.me/" + n + (txt ? "?text=" + encodeURIComponent(txt) : ""); };
   const slugify = s => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40);
   const hoje = () => A.ymd(new Date());
-  // Caminho base: "/" num domínio próprio; "/repo/" no GitHub Pages (definido no <head> do index.html).
   const BASE = window.BASE || "/";
-  const url = p => p.startsWith("/") ? BASE + p.slice(1) : p;          // "/painel" -> "/barbearia/painel"
-  const abs = p => location.origin + url(p);                             // link completo para compartilhar
+  const url = p => p.startsWith("/") ? BASE + p.slice(1) : p;
+  const abs = p => location.origin + url(p);
   const iniciais = n => String(n || "?").trim().split(/\s+/).slice(0, 2).map(p => p[0]).join("").toUpperCase();
 
   let toastT;
@@ -39,7 +37,6 @@
   }
   async function copiar(txt) { try { await navigator.clipboard.writeText(txt); toast("Copiado!"); } catch { toast("Não foi possível copiar. Selecione e copie manualmente."); } }
 
-  // ---------- moldura: topo, barra inferior, rodapé ----------
   const ICON = {
     inicio: '<path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
     agendar: '<path d="M7 3v3M17 3v3M4 8h16M5 5h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM12 11v6M9 14h6"/>',
@@ -67,7 +64,6 @@
     $("#rodape").innerHTML = `${extra}<small class="lukdev">Feito por LukDev</small>`;
   }
 
-  // ---------- roteador ----------
   function partes() {
     let cam = decodeURIComponent(location.pathname); if (cam.startsWith(BASE)) cam = "/" + cam.slice(BASE.length);
     const p = cam.split("/").filter(Boolean);
@@ -84,7 +80,6 @@
     const href = a.dataset.raw || a.getAttribute("href"); if (!href || !href.startsWith("/")) return;
     e.preventDefault(); go(href);
   });
-  // links internos escritos como "/painel" ganham o caminho base automaticamente
   function ajustarLinks(raiz) {
     if (BASE === "/") return;
     raiz.querySelectorAll('a[href^="/"]:not([data-raw])').forEach(a => { const h = a.getAttribute("href"); a.dataset.raw = h; a.setAttribute("href", url(h)); });
@@ -99,10 +94,9 @@
     if (window.Painel) window.Painel.parar && window.Painel.parar();
     if (window.Movimento) window.Movimento.parar();
     if (!window.Store.configurado) return naoConfigurado();
-    // link de e-mail (confirmação/nova senha) que caiu na página inicial: leva para o painel, que faz o login
     if (!r && /access_token=|error_description=/.test(location.hash)) { history.replaceState({}, "", url("/painel") + location.hash); return window.Painel.render(); }
     if (!r) {
-      if (standalone()) { // app instalado abre direto onde a pessoa usa
+      if (standalone()) {
         if (window.Store.logado() && ls.get("bb_ultimo_painel", false)) return go("/painel", true);
         const u = ls.get("bb_ultima", ""); if (u) return go("/" + u, true);
       }
@@ -121,7 +115,6 @@
   }
   const iconesDe = (bid, logo) => logo && logo.v && window.Store.logoURL
     ? { i192: window.Store.logoURL(bid, logo, "icon-192.png"), i512: window.Store.logoURL(bid, logo, "icon-512.png"), mask: window.Store.logoURL(bid, logo, "maskable-512.png") } : null;
-  // planos vêm do banco (cache de 5 min)
   let planosCache = null;
   async function planos(forcar) {
     if (!forcar && planosCache && Date.now() - planosCache.t < 300000) return planosCache.l;
@@ -129,15 +122,12 @@
     catch (e) { const c = ls.get("lk_planos", null); if (c) return c; throw e; }
   }
 
-  // ---------- PWA ----------
   const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   let promptInst = null;
   addEventListener("beforeinstallprompt", e => { e.preventDefault(); promptInst = e; const b = $("#btnInstalar"); if (b) b.hidden = false; });
   async function instalar() { if (!promptInst) return; promptInst.prompt(); await promptInst.userChoice; promptInst = null; const b = $("#btnInstalar"); if (b) b.hidden = true; }
   addEventListener("appinstalled", () => { const b = $("#btnInstalar"); if (b) b.hidden = true; toast("App instalado!"); });
-  // manifest próprio por barbearia: o app instalado abre direto nela, com o nome dela
   let manifestURL = null;
-  // icones: { i192, i512, mask } (ícone enviado pela barbearia) ou nada (ícone do LKBarber)
   function manifestPara(nome, startPath, icones) {
     const o = location.origin + BASE.slice(0, -1), m = { name: nome, short_name: nome.slice(0, 24), start_url: o + startPath, scope: o + "/", id: o + startPath,
       display: "standalone", orientation: "portrait", background_color: "#f3f3f3", theme_color: "#f3f3f3", lang: "pt-BR",

@@ -1,4 +1,3 @@
-// Camada de dados: Supabase (REST + Auth + Storage + Edge Functions).
 (function () {
   const cfg = window.BARBER_BACKEND || {};
   const URL_ = (cfg.SUPABASE_URL || "").replace(/\/+$/, "");
@@ -11,7 +10,6 @@
   const slugOk = s => /^[a-z0-9]([a-z0-9-]{1,38}[a-z0-9])$/.test(s) && !P.reservados.includes(s);
   if (!URL_ || !KEY) { window.Store = { configurado: false, slugOk }; return; }
 
-  // ---------- sessão ----------
   const sess = { get: () => ls.get("lk_sess", null), set: v => ls.set("lk_sess", v) };
   const guardar = j => sess.set({ access: j.access_token, refresh: j.refresh_token, exp: Date.now() + j.expires_in * 1000, user: { id: j.user.id, email: j.user.email } });
   async function auth(path, body) {
@@ -28,7 +26,7 @@
     }
     return s.access;
   }
-  // A chave publicável (sb_publishable_) não é JWT: vai só no "apikey". O Authorization leva o login do usuário.
+  // publishable não é jwt, vai só no apikey
   function headers(t, extra) {
     const h = Object.assign({ apikey: KEY, "Content-Type": "application/json" }, extra || {});
     if (t) h.Authorization = "Bearer " + t; else if (!KEY.startsWith("sb_")) h.Authorization = "Bearer " + KEY;
@@ -59,7 +57,6 @@
 
   window.Store = {
     configurado: true, slugOk, logoURL, fotoURL,
-    // ---- público ----
     async planos() { return ((await sb("/rest/v1/planos?ativo=eq.true&order=ordem")) || []).map(p => Object.assign(p, { preco: Number(p.preco) })); },
     async publico(slug) {
       const r = await rpc("dados_publicos", { p_slug: slug }); if (!r) return null;
@@ -71,7 +68,6 @@
     async statusCliente(ids) { return ids.length ? (await rpc("status_agendamentos", { p_ids: ids })) || [] : []; },
     async cancelar(id, token) { await rpc("cancelar_agendamento", { p_id: id, p_token: token }); },
     async slugLivre(slug) { return slugOk(slug) && !!(await rpc("slug_disponivel", { p_slug: slug })); },
-    // ---- conta ----
     async entrar(email, senha) {
       const j = await auth("token?grant_type=password", { email, password: senha });
       if (!j.access_token) throw new Error(/confirm/i.test(j.msg || j.error_description || j.error_code || "") ? "Confirme seu e-mail pelo link que enviamos e tente de novo." : "E-mail ou senha incorretos.");
@@ -82,7 +78,6 @@
       const r = await fetch(URL_ + "/auth/v1/recover", { method: "POST", headers: { apikey: KEY, "Content-Type": "application/json" }, body: JSON.stringify({ email, redirect_to: base + "painel" }) });
       if (!r.ok && r.status !== 429) throw new Error("Não foi possível enviar agora. Tente em alguns minutos.");
     },
-    // volta dos links de e-mail (confirmar cadastro / recuperar senha): tokens chegam no #hash
     async capturarRetornoAuth() {
       const h = new URLSearchParams(location.hash.replace(/^#/, ""));
       if (h.get("error_description")) { history.replaceState({}, "", location.pathname + location.search); throw new Error(h.get("error_description").replace(/\+/g, " ")); }
@@ -115,12 +110,11 @@
     async criarPendente() { return await rpc("criar_barbearia_pendente", {}, true); },
     async criarBarbearia({ nome, slug, nomeDono }) { return await rpc("criar_barbearia", { p_nome: nome, p_slug: slug, p_nome_dono: nomeDono }, true); },
     async aceitarConvite(cod) { await rpc("aceitar_convite", { p_codigo: cod.toUpperCase().trim() }, true); },
-    // ---- barbearia ----
     async barbearia(bid) { const r = await sb(`/rest/v1/barbearias?id=eq.${q(bid)}&select=*`, { auth: true }); const b = r[0];
       if (!b) throw new Error("Barbearia não encontrada."); b.config = Object.assign({}, window.DEFAULT_CONFIG, b.config || {}); return b; },
     async salvarBarbearia(bid, { nome, config }) { const body = {}; if (nome) body.nome = nome; if (config) body.config = config;
       await sb(`/rest/v1/barbearias?id=eq.${q(bid)}`, { method: "PATCH", auth: true, body }); },
-    async enviarLogo(bid, arquivos) { // [{nome, blob}]
+    async enviarLogo(bid, arquivos) {
       const t = await token(); if (!t) throw new Error("Sessão expirada. Entre novamente.");
       for (const a of arquivos) {
         const r = await fetch(`${URL_}/storage/v1/object/logos/${bid}/${a.nome}`, { method: "POST", body: a.blob,
@@ -128,7 +122,6 @@
         if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.message || j.error || "Não foi possível enviar a imagem."); }
       }
     },
-    // ---- produtos e vendas ----
     async produtos(bid) { return ((await sb(`/rest/v1/produtos?barbearia_id=eq.${q(bid)}&order=ordem,nome`, { auth: true })) || []).map(p => Object.assign(p, { preco: Number(p.preco) })); },
     async salvarProduto(bid, p) {
       const body = { nome: p.nome, descricao: p.descricao || "", preco: p.preco, estoque: p.estoque, ativo: p.ativo, foto_v: p.foto_v || null, ordem: p.ordem || 0 };
@@ -159,12 +152,10 @@
     async bloquear(bid, b) { await sb("/rest/v1/bloqueios", { method: "POST", auth: true, headers: { Prefer: "return=minimal" },
       body: { barbearia_id: bid, prof_id: b.prof_id || null, data: b.data, ini: b.ini || null, fim: b.fim || null, motivo: b.motivo || "" } }); },
     async desbloquear(bid, id) { await sb(`/rest/v1/bloqueios?id=eq.${q(id)}`, { method: "DELETE", auth: true }); },
-    // ---- assinatura (Edge Function "assinatura", que fala com o Asaas) ----
     async assinatura(bid, acao, dados) {
       return await sb("/functions/v1/assinatura", { method: "POST", auth: true, body: Object.assign({ bid, acao }, dados || {}) });
     },
     async pagamentos(bid) { return ((await sb(`/rest/v1/pagamentos?barbearia_id=eq.${q(bid)}&order=vencimento.desc&limit=12`, { auth: true })) || []); },
-    // ---- super admin ----
     async todas() { return (await rpc("todas_barbearias", {}, true)) || []; },
     async atualizarAssinatura(id, patch) { await sb(`/rest/v1/barbearias?id=eq.${q(id)}`, { method: "PATCH", auth: true, body: patch }); },
     async salvarPlano(p) { await sb(`/rest/v1/planos?id=eq.${q(p.id)}`, { method: "PATCH", auth: true, body: { nome: p.nome, preco: p.preco, max_prof: p.max_prof, descricao: p.descricao, ativo: p.ativo } }); }

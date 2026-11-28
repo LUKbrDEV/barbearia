@@ -1,16 +1,9 @@
-/*
-LKBarber — visual no estilo do Windows 11 (Fluent)
-CORES: cinza claro/grafite de sistema, cartões brancos (ou grafite no escuro), latão como cor de destaque, verde de apoio, vermelho só para erro.
-TIPOS: Segoe UI Variable (a fonte do Windows 11); em outros sistemas cai na fonte nativa (San Francisco, Roboto).
-FORMAS: cantos de 8px, bordas de 1px, sombras suaves em camadas, barras translúcidas (acrílico) e fundo "bloom" nas áreas de destaque.
-*/
 :root{color-scheme:light dark;
   --bg:light-dark(#f3f3f3,#202020);--ink:light-dark(#1b1b1b,#f3f3f3);--mut:light-dark(#5f5f5f,#a8a8a8);
   --sup:light-dark(#ececec,#2b2b2b);--linha:light-dark(#e3e3e3,#383838);
   --cartao:light-dark(#ffffff,#2b2b2b);--camada:light-dark(#f9f9f9,#272727);
   --borda:light-dark(rgba(0,0,0,.08),rgba(255,255,255,.08));--borda-forte:light-dark(rgba(0,0,0,.28),rgba(255,255,255,.28));
   --acrilico:light-dark(rgba(243,243,243,.82),rgba(32,32,32,.82));
-  /* --verm é a cor de destaque (latão); o nome ficou por compatibilidade */
   --verm:light-dark(#8a5d17,#e2b66b);--verm-tx:light-dark(#ffffff,#1b1b1b);--tinta:light-dark(#f7efe1,#3a3122);
   --azul:light-dark(#2f5d4a,#8cc7a9);--ok:light-dark(#2e6b3f,#6cbd85);--erro:light-dark(#b42318,#f0806f);
   --latao:var(--verm);--escuro:#202020;--tab:68px;--r:8px;
@@ -50,7 +43,6 @@ body[data-area=site] main{max-width:1100px}
 .pilha{display:grid;gap:8px}
 .full{grid-column:1/-1}
 
-/* topo */
 .top{position:sticky;top:0;z-index:20;display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:calc(10px + env(safe-area-inset-top)) max(5vw,18px) 10px;background:var(--escuro);color:#fff;min-height:58px}
 .marca{display:flex;align-items:center;gap:8px;text-decoration:none;font-family:var(--f-titulo);font-size:20px;letter-spacing:.02em;overflow:hidden}
@@ -60,7 +52,6 @@ body[data-area=site] main{max-width:1100px}
 .topo-acoes{display:flex;gap:8px;flex:none}
 .btn-inst,.btn-claro{background:#fff!important;color:var(--escuro)!important;border:0;border-radius:999px;padding:0 14px;font-weight:800;font-size:14px;min-height:38px}
 
-/* botões */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:48px;padding:0 22px;border:0;border-radius:12px;
   background:var(--verm);color:var(--verm-tx);font-weight:800;text-decoration:none;cursor:pointer;text-align:center}
 .btn:disabled{opacity:.4;cursor:not-allowed}
@@ -75,7 +66,6 @@ body[data-area=site] main{max-width:1100px}
 .seg{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px}
 .chips-filtro{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}
 
-/* hero da barbearia */
 .hero{display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:12px;align-items:center;padding:28px max(5vw,18px) 22px;
   background:var(--escuro);color:#fff;border-bottom:6px solid var(--verm)}
 .hero h1{color:#fff;margin-bottom:.15em;font-size:clamp(40px,11vw,64px);overflow-wrap:anywhere}
@@ -99,7 +89,6 @@ body[data-area=site] main{max-width:1100px}
 .equipe-pub div{display:flex;flex-direction:column;align-items:center;gap:6px;font-weight:700;min-width:64px}
 .equipe-pub .avatar{width:56px;height:56px;font-size:19px;background:var(--verm);color:var(--verm-tx)}
 
-/* agendar */
 .titulo-pag{font-size:40px}
 fieldset{border:0;padding:0;margin:0 0 26px;transition:opacity .2s}
 fieldset.travado{opacity:.4;pointer-events:none}
@@ -131,7 +120,6 @@ legend b{display:grid;place-items:center;width:28px;height:28px;border-radius:50
   padding:10px 10px 10px 16px;background:var(--escuro);color:#fff;border-radius:16px;box-shadow:0 10px 30px #0004;z-index:5}
 .resumo{flex:1;font-size:14px;line-height:1.35}.resumo b{font-size:15px}
 
-/* ticket */
 .ticket,.assin-card{border:2px dashed var(--linha);border-radius:18px;padding:20px;margin-bottom:14px;background:var(--sup)}
 .quando{font-family:var(--f-titulo);font-size:32px;line-height:1.05;margin:6px 0}
 .ticket .acoes{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
@@ -144,7 +132,6 @@ legend b{display:grid;place-items:center;width:28px;height:28px;border-radius:50
 .info-lista small{display:block;color:var(--mut);font-size:13px}
 .instalar-box{background:var(--sup);border-radius:var(--r);padding:18px}.instalar-box p{margin:.4em 0}
 
-/* rodapé e tabbar */
 .rodape{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;max-width:1100px;margin:0 auto;padding:18px max(5vw,18px) 24px;color:var(--mut);font-size:14px}
 .lukdev{font-size:11px;opacity:.75}
 .link-painel{font-size:13px;color:var(--mut)}
@@ -154,7 +141,6 @@ legend b{display:grid;place-items:center;width:28px;height:28px;border-radius:50
 .tabbar svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 .tabbar a.ativo{color:var(--verm)}
 
-/* toast / modal */
 .toast{position:fixed;left:50%;bottom:calc(var(--tab) + 20px + env(safe-area-inset-bottom));transform:translate(-50%,20px);opacity:0;
   background:var(--ink);color:var(--bg);padding:12px 18px;border-radius:12px;font-weight:700;transition:.25s;z-index:60;max-width:90vw;pointer-events:none;text-align:center}
 .toast.on{opacity:1;transform:translate(-50%,0)}
@@ -165,7 +151,6 @@ legend b{display:grid;place-items:center;width:28px;height:28px;border-radius:50
 .menu small{color:var(--mut);font-weight:600}.menu .perigo{color:var(--erro)}
 .codigo{font-family:var(--f-titulo);font-size:44px;letter-spacing:.18em;text-align:center;margin:8px 0;background:var(--sup);border-radius:14px;padding:8px}
 
-/* formulários de página */
 .form-pag{max-width:440px;margin:0 auto;padding:36px max(5vw,18px) 40px}
 .form-pag h1{font-size:40px}
 .l-sub2{color:var(--mut);margin-top:-6px}
@@ -179,7 +164,6 @@ legend b{display:grid;place-items:center;width:28px;height:28px;border-radius:50
 .aviso{background:light-dark(#fff6dd,#2c2614);border-radius:12px;padding:12px 14px;font-size:14px;margin-bottom:14px}
 .aviso.ruim{background:light-dark(#fde8eb,#3a1a20)}
 
-/* ===== site de vendas ===== */
 .l-hero{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:28px;align-items:center;background:var(--escuro);color:#fff;
   padding:44px max(5vw,18px) 40px;border-bottom:6px solid var(--verm)}
 body[data-area=site] .l-hero{margin:0 calc(50% - 50vw);padding-inline:max(5vw,calc(50vw - 532px))}
@@ -217,7 +201,6 @@ body[data-area=site] .band-escura{margin:0 calc(50% - 50vw);padding-inline:max(5
 .faq summary{cursor:pointer;font-weight:800;min-height:48px;display:flex;align-items:center}
 .faq p{margin:0 0 14px;color:var(--mut)}
 
-/* ===== painel ===== */
 .p-top{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:20px max(5vw,18px) 0}
 .p-top h1{font-size:36px;margin:0}
 .p-sec{padding:16px max(5vw,18px) 40px}
@@ -282,7 +265,6 @@ body[data-area=site] .band-escura{margin:0 calc(50% - 50vw);padding-inline:max(5
   .hero{grid-template-columns:minmax(0,1fr) 160px;padding-block:44px}}
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 
-/* ===== horários: um cartão por dia ===== */
 .dias-lista{display:grid;gap:10px}
 .dia-card{border:1.5px solid var(--linha);border-radius:16px;background:var(--bg);transition:border-color .2s}
 .dia-card:not(.fechado){border-color:light-dark(#d3d6dd,#353a44)}
@@ -302,7 +284,6 @@ body[data-area=site] .band-escura{margin:0 calc(50% - 50vw);padding-inline:max(5
 .dia-corpo>.lnk{justify-self:start;padding:4px 0}
 .barra-salvar{position:sticky;bottom:calc(var(--tab) + env(safe-area-inset-bottom) + 8px);margin-top:18px;z-index:5}
 .barra-salvar .btn{width:100%;box-shadow:0 10px 26px #0003}
-/* interruptor (toggle) */
 .toggle{position:relative;display:inline-block;width:52px;height:32px;cursor:pointer;flex:none}
 .toggle input{position:absolute;inset:0;opacity:0;margin:0;width:100%;height:100%;cursor:pointer;min-height:0;z-index:1}
 .toggle .trilho{position:absolute;inset:0;border-radius:999px;background:light-dark(#cfd3da,#3a3f49);transition:background .2s}
@@ -311,7 +292,6 @@ body[data-area=site] .band-escura{margin:0 calc(50% - 50vw);padding-inline:max(5
 .toggle input:checked+.trilho::after{transform:translateX(20px)}
 .toggle input:focus-visible+.trilho{outline:3px solid var(--azul);outline-offset:2px}
 
-/* ===== assinatura ===== */
 .assin-card{border-style:solid;display:grid;gap:6px}
 .assin-card p{margin:0}
 .assin-card .btn{margin-top:8px}
@@ -332,7 +312,6 @@ body[data-area=site] .band-escura{margin:0 calc(50% - 50vw);padding-inline:max(5
 .rec{font-style:normal;font-size:12px;font-weight:800;color:var(--ok);background:light-dark(#e2f4ea,#173326);border-radius:999px;padding:2px 8px;margin-left:4px;vertical-align:2px}
 .perigo-txt{color:var(--erro)}
 
-/* ===== ícone da barbearia ===== */
 .icone-atual{display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:center}
 .ic-grande{width:88px;height:88px;border-radius:22px;overflow:hidden;background:var(--escuro);display:grid;place-items:center;box-shadow:0 6px 18px #0003}
 .ic-grande img{width:100%;height:100%;object-fit:cover}.ic-grande svg{width:52px;height:52px}
@@ -350,7 +329,6 @@ input[type=range]{min-height:0;padding:0;border:0;accent-color:var(--verm);heigh
 
 @media(max-width:420px){.fatura{grid-template-columns:minmax(0,1fr) auto}.fatura .btn{grid-column:1/-1}}
 
-/* ===== página de vendas: seções novas ===== */
 .nao-raiz #landing{display:none}
 #landing a:not(.btn){color:inherit}
 .l-mini a{color:#fff;font-weight:800;text-decoration:underline;margin-left:4px}
@@ -383,7 +361,6 @@ input[type=range]{min-height:0;padding:0;border:0;accent-color:var(--verm);heigh
 .links-legais a{color:inherit}
 .link-prev{display:block;margin-top:6px;color:var(--mut);font-size:13px;overflow-wrap:anywhere}.link-prev b{color:var(--ink)}
 
-/* ===== fotos dos serviços (compactas) ===== */
 .servicos li.com-foto{grid-template-columns:52px minmax(0,1fr) auto;column-gap:12px}
 .servicos li.com-foto .mini-foto{grid-row:1/3}
 .servicos li.com-foto small{grid-column:2/-1}
@@ -395,7 +372,6 @@ input[type=range]{min-height:0;padding:0;border:0;accent-color:var(--verm);heigh
 .zoom{margin:0 0 12px;display:grid;gap:8px}
 .zoom img{width:100%;height:auto;aspect-ratio:1;object-fit:cover;border-radius:16px;background:var(--sup)}
 .zoom figcaption{font-weight:800;font-size:18px}
-/* ===== vitrine de produtos ===== */
 .vitrine-cab{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.vitrine-cab h2{margin:0}
 .vitrine{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 10px}
 .vit-item{flex:none;width:150px;scroll-snap-align:start;display:flex;flex-direction:column;gap:4px}
@@ -405,7 +381,6 @@ input[type=range]{min-height:0;padding:0;border:0;accent-color:var(--verm);heigh
 .vit-item .preco{font-weight:800}
 .vit-item .btn,.vit-item .tag{align-self:flex-start;margin-top:auto}
 .vit-item.esgotado .vit-foto{opacity:.45}
-/* ===== painel: produtos e vendas ===== */
 .foto-linha{display:flex;align-items:center;gap:12px}
 .miniatura{width:64px;height:64px;flex:none;border-radius:12px;overflow:hidden;background:var(--sup);display:grid;place-items:center;border:1.5px dashed var(--linha)}
 .miniatura span{font-size:11px;color:var(--mut);text-align:center;line-height:1.2;padding:4px}
@@ -427,17 +402,12 @@ input[type=range]{min-height:0;padding:0;border:0;accent-color:var(--verm);heigh
 .op-foto small{white-space:normal}
 .chips-prof .op>span{width:116px}
 
-/* =====================================================================
-   VISUAL ESTILO WINDOWS 11 (Fluent): superfícies lisas, cantos de 8px,
-   bordas de 1px, sombras suaves, fundo "bloom" e destaque latão.
-   ===================================================================== */
 body{font-size:16px;line-height:1.5;background:var(--bg)}
 h1,h2,h3{font-family:var(--f-titulo);font-weight:600;letter-spacing:-.015em;line-height:1.15}
 h1{font-size:clamp(32px,8vw,46px)}h2{font-size:clamp(24px,5.4vw,30px)}h3{font-size:19px}
 a{text-underline-offset:3px}
 ::selection{background:var(--verm);color:var(--verm-tx)}
 
-/* topo: barra translúcida (acrílico) */
 .top{background:var(--acrilico);color:var(--ink);-webkit-backdrop-filter:saturate(1.6) blur(24px);backdrop-filter:saturate(1.6) blur(24px);
   border-bottom:1px solid var(--borda);box-shadow:none}
 .marca{font-family:var(--f-titulo);font-weight:600;font-size:18px;letter-spacing:-.01em}
@@ -445,7 +415,6 @@ a{text-underline-offset:3px}
 .btn-inst,.btn-claro{border-radius:6px!important;font-weight:600;font-size:14px!important;min-height:34px;
   background:var(--cartao)!important;color:var(--ink)!important;border:1px solid var(--borda)!important;box-shadow:var(--s1)}
 
-/* botões */
 .btn{border-radius:6px;font-weight:600;letter-spacing:0;text-transform:none;font-size:15px;min-height:44px;
   border:1px solid transparent;box-shadow:var(--s1),inset 0 -1px 0 rgba(0,0,0,.18);transition:background .15s,transform .1s}
 .btn:not(:disabled):hover{filter:brightness(1.06)}
@@ -458,7 +427,6 @@ a{text-underline-offset:3px}
 .chip{border-radius:999px;font-weight:600;font-size:14px;border:1px solid var(--borda);background:var(--cartao);min-height:36px}
 .chip.on,.seg .chip.on{background:var(--verm);color:var(--verm-tx);border-color:transparent}
 
-/* campos: linha de baixo marca o foco, como no Windows */
 input,select,textarea{border-radius:6px;border:1px solid var(--borda);border-bottom-color:var(--borda-forte);background:var(--cartao);transition:box-shadow .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--borda);border-bottom-color:var(--verm);box-shadow:inset 0 -1px 0 var(--verm);outline:0}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:0}
@@ -467,7 +435,6 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:0}
 .slug-box{border-radius:6px;border:1px solid var(--borda);border-bottom-color:var(--borda-forte);background:var(--cartao)}
 .slug-box:focus-within{outline:0;border-bottom-color:var(--verm);box-shadow:inset 0 -1px 0 var(--verm)}
 
-/* faixas de destaque: fundo "bloom" liso, sem textura */
 .hero,.l-hero,.cta-final{position:relative;background:var(--bloom);color:var(--ink);border-bottom:0}
 .hero::after,.l-hero::after,.cta-final::before{content:none}
 .hero h1,.l-hero h1,.cta-final h2{color:var(--ink)}
@@ -481,14 +448,12 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline:0}
 .tela figcaption b{color:var(--ink)}
 .band>h2::after,.p-sec>h2::after,#perguntas>h2::after{content:none}
 
-/* lista de serviços e horários: linhas limpas */
 .servicos li b{font-weight:600}
 .servicos li .preco{font-weight:600;font-variant-numeric:tabular-nums}
 .mini-foto{border-radius:6px;border:1px solid var(--borda)}
 .horarios li span:last-child{font-variant-numeric:tabular-nums}
 .horarios li.hoje span:first-child::after{content:" · hoje";color:var(--verm);font-weight:600}
 
-/* opções (serviço, dia, horário, barbeiro): cartões */
 .op>span{border-radius:8px;border:1px solid var(--borda);background:var(--cartao);box-shadow:var(--s1)}
 .op input:checked+span{border-color:var(--verm);background:var(--tinta);box-shadow:inset 0 0 0 1px var(--verm)}
 .op input:focus-visible+span{outline:2px solid var(--ink);outline-offset:2px}
@@ -501,13 +466,11 @@ legend b{background:var(--verm);color:var(--verm-tx);border-radius:999px}
 .avatar{font-weight:600}
 .equipe-pub .avatar{background:var(--verm);color:var(--verm-tx);box-shadow:0 0 0 3px var(--bg),0 0 0 4px var(--borda)}
 
-/* cartões em geral */
 .ticket,.assin-card,.kpi,.dia-card,.prof-card,.adm-card,.plano,.passos li,.ad,.inclui,.prod-card,.bf{
   background:var(--cartao);border:1px solid var(--borda);border-radius:8px;box-shadow:var(--s2)}
 .ticket .quando,.quando{font-family:var(--f-titulo);font-weight:600;font-size:26px}
 .tag{border-radius:999px;font-weight:600;font-size:12px;padding:2px 10px;letter-spacing:0;text-transform:none}
 
-/* painel */
 .p-top h1{font-size:clamp(26px,6.5vw,34px)}
 .kpi small{font-size:12px;font-weight:600;color:var(--mut)}
 .kpi b{font-weight:600;font-size:clamp(22px,5.6vw,28px);font-variant-numeric:tabular-nums}
@@ -531,7 +494,6 @@ legend b{background:var(--verm);color:var(--verm-tx);border-radius:999px}
 .aviso.ruim{border-left-color:var(--erro)}
 .codigo{font-family:var(--f-titulo);font-weight:600}
 
-/* página de vendas */
 .l-hero{padding-top:56px;padding-bottom:56px}
 .l-hero h1{font-size:clamp(34px,5.8vw,56px);letter-spacing:-.025em}
 .celular{border-radius:38px;box-shadow:var(--s4)}
@@ -557,7 +519,6 @@ legend b{background:var(--verm);color:var(--verm-tx);border-radius:999px}
 .dias-sel span,.dias-mini span{border-radius:6px}
 @media(prefers-reduced-motion:reduce){.btn{transition:none}}
 
-/* telas do app: no computador as 4 lado a lado, inteiras; no celular, carrossel com setas */
 @media (min-width:760px){
   .telas{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;overflow:visible;scroll-snap-type:none;max-width:1100px;margin-inline:auto}
   .tela{width:auto;align-content:start}
@@ -565,7 +526,6 @@ legend b{background:var(--verm);color:var(--verm-tx);border-radius:999px}
   .telas-nav{display:none}
 }
 
-/* palco: do celular do cliente para a agenda do barbeiro (animado pelo movimento.js; sem ele fica nesta composição final) */
 .palco{overflow:clip}
 .palco-sub{color:var(--mut);max-width:560px;margin:-4px 0 18px}
 .palco-cena{position:relative;width:min(100%,540px);aspect-ratio:1/1;margin:0 auto;container-type:inline-size;font-family:var(--f-texto)}
@@ -602,14 +562,9 @@ legend b{background:var(--verm);color:var(--verm-tx);border-radius:999px}
   .palco>h2{grid-area:t;align-self:end}.palco-sub{grid-area:s;align-self:start;font-size:18px}
   .palco-cena{grid-area:c}
 }
-/* espuma de barbear que segue o mouse no topo (só computador) */
 .espuma{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
 .l-hero>*:not(.espuma){position:relative;z-index:1}
 
-/* =====================================================================
-   PERSONALIDADE: base Fluent + faixas "noite de barbearia" (café escuro com brilho de latão),
-   destaque em serifa itálica (Instrument Serif) e rótulos de seção.
-   ===================================================================== */
 :root{--f-serifa:"Instrument Serif","Iowan Old Style",Georgia,"Times New Roman",serif;
   --noite:radial-gradient(70% 90% at 88% 0%,rgba(226,182,107,.26),transparent 60%),
           radial-gradient(60% 80% at 0% 100%,rgba(176,96,46,.22),transparent 62%),#17130f}
@@ -617,7 +572,6 @@ h1 em,h2 em{font-family:var(--f-serifa);font-style:italic;font-weight:400;letter
 .olho{display:flex;align-items:center;gap:10px;margin-bottom:10px;font-family:var(--f-texto);font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--verm)}
 .olho::before{content:"";width:22px;height:2px;border-radius:2px;background:currentColor}
 
-/* faixas escuras: topo, telas do app, três visões, horário de funcionamento, chamada final */
 .l-hero,.hero,.band-escura,.cta-final{
   --ink:#f5efe6;--mut:#b9ae9e;--linha:rgba(255,255,255,.1);--borda:rgba(255,255,255,.1);--borda-forte:rgba(255,255,255,.3);
   --cartao:rgba(255,255,255,.06);--camada:rgba(255,255,255,.04);--tinta:rgba(226,182,107,.16);
@@ -628,7 +582,6 @@ h1 em,h2 em{font-family:var(--f-serifa);font-style:italic;font-weight:400;letter
 .btn-sec,.btn-vidro{backdrop-filter:blur(8px)}
 .cta-final h2{font-size:clamp(28px,5vw,44px)}
 
-/* cartões com mais caráter */
 .bf{position:relative;overflow:hidden;transition:transform .2s,box-shadow .2s}
 .bf::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--verm);opacity:0;transition:opacity .2s}
 .bf:hover{transform:translateY(-3px);box-shadow:var(--s3)}.bf:hover::after{opacity:1}
@@ -646,7 +599,6 @@ legend b{font-family:var(--f-serifa);font-style:italic;font-weight:400;font-size
 .faq[open] summary::after{rotate:45deg}
 .faq summary{gap:12px;list-style:none}.faq summary::-webkit-details-marker{display:none}
 
-/* capa da barbearia (foto de fundo no topo da página, com escurecimento escolhido pelo dono) */
 .hero.com-capa{background:#111 var(--capa) center/cover no-repeat;isolation:isolate;min-height:clamp(260px,46vw,380px)}
 .hero.com-capa::before{content:"";position:absolute;inset:0;z-index:-1;
   background:linear-gradient(180deg,rgba(0,0,0,calc(var(--capa-op,.55) * .7)),rgba(0,0,0,var(--capa-op,.55)) 70%)}

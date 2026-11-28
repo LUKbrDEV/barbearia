@@ -1,35 +1,30 @@
-// ===== CONEXÃO COM O SUPABASE (obrigatório) =====
-// Supabase → Project Settings → API Keys. Use a chave PUBLICÁVEL (sb_publishable_...) ou a "anon" antiga.
-// NUNCA coloque aqui a chave secreta (sb_secret_...) nem a service_role.
+// supabase: aqui vai só a chave publishable, nunca a secret
 window.BARBER_BACKEND = {
-  SUPABASE_URL: "https://psolqyvhsxdpuodxlpwh.supabase.co",              // ex: "https://abcdefgh.supabase.co"
-  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ul0lVVWTqWjfzCc9sQetXA_M0bCsz3O"   // ex: "sb_publishable_..."
+  SUPABASE_URL: "https://psolqyvhsxdpuodxlpwh.supabase.co",
+  SUPABASE_PUBLISHABLE_KEY: "sb_publishable_ul0lVVWTqWjfzCc9sQetXA_M0bCsz3O"
 };
 
-// ===== SUA PLATAFORMA =====
-// Preços e limites dos planos ficam no banco (tabela "planos"), editáveis em /admin.
 window.PLATAFORMA = {
   nome: "LKBarber",
-  suporteWhatsapp: "38998504119",           // seu WhatsApp de suporte, com DDD (ex.: "38999990000")
+  suporteWhatsapp: "38998504119",
   diasTeste: 14,
-  demoSlug: "demo",              // barbearia de exemplo: crie uma com esse endereço e o link aparece no site
-  // Aparecem nos Termos de Uso e na Política de Privacidade (preencha antes de vender):
-  responsavel: "Lucas Santos",               // seu nome completo ou razão social
-  documento: "70047445661",                 // CPF ou CNPJ
-  email: "lucasinfotec20@gmail.com",                     // e-mail de contato e para pedidos de privacidade (LGPD)
-  foro: "Paracatu/ MG",                      // cidade/UF do foro, ex.: "Montes Claros/MG"                 // só texto; o prazo real está em criar_barbearia() no schema.sql
+  demoSlug: "demo",
+  // dados que aparecem nos termos e na privacidade
+  responsavel: "Lucas Santos",
+  documento: "70047445661",
+  email: "lucasinfotec20@gmail.com",
+  foro: "Paracatu/ MG",
   reservados: ["painel", "admin", "entrar", "cadastro", "api", "css", "js", "icons", "supabase", "index.html", "404.html", "sw.js",
     "manifest.webmanifest", "termos", "privacidade", "img", "lkbarber", "suporte", "ajuda", "app"]
 };
 
-// Configuração inicial de toda barbearia nova (editável no painel).
 window.DEFAULT_CONFIG = {
   slogan: "Corte, barba e conversa boa.",
   whatsapp: "",
   endereco: "",
   instagram: "",
   mapsUrl: "",
-  logo: null,          // { v: versão } quando a barbearia envia o próprio ícone
+  logo: null,
   pedirTelefone: false,
   intervalo: 30,
   antecedenciaMin: 60,
