@@ -521,3 +521,216 @@ grant all on produtos, vendas to service_role;
 revoke all on function registrar_venda(uuid, int, uuid, uuid), desfazer_venda(uuid) from public, anon;
 grant execute on function registrar_venda(uuid, int, uuid, uuid), desfazer_venda(uuid) to authenticated;
 grant execute on function dados_publicos(text) to anon, authenticated;
+
+-- financeiro (só o dono vê): contas fixas do mês e lançamentos avulsos de entrada/saída
+create table if not exists contas_fixas (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  descricao text not null check (char_length(descricao) between 1 and 60),
+  categoria text not null default 'Outros' check (char_length(categoria) <= 40),
+  valor numeric(10,2) not null check (valor >= 0),
+  dia int not null default 10 check (dia between 1 and 31),
+  ativo boolean not null default true,
+  criado_em timestamptz not null default now()
+);
+create index if not exists cf_idx on contas_fixas (barbearia_id);
+
+create table if not exists lancamentos (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  tipo text not null check (tipo in ('entrada', 'saida')),
+  descricao text not null check (char_length(descricao) between 1 and 80),
+  categoria text not null default 'Outros' check (char_length(categoria) <= 40),
+  valor numeric(10,2) not null check (valor > 0),
+  data date not null default hoje_br(),
+  pago boolean not null default true,
+  conta_fixa_id uuid references contas_fixas on delete set null,
+  competencia text check (competencia is null or competencia ~ '^\d{4}-\d{2}$'),
+  criado_em timestamptz not null default now(),
+  unique (conta_fixa_id, competencia)
+);
+create index if not exists lanc_idx on lancamentos (barbearia_id, data);
+
+alter table contas_fixas enable row level security;
+alter table lancamentos enable row level security;
+drop policy if exists cf_sel on contas_fixas; create policy cf_sel on contas_fixas for select to authenticated using (is_super() or papel_em(barbearia_id) = 'dono');
+drop policy if exists cf_ins on contas_fixas; create policy cf_ins on contas_fixas for insert to authenticated with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists cf_upd on contas_fixas; create policy cf_upd on contas_fixas for update to authenticated using (papel_em(barbearia_id) = 'dono') with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists cf_del on contas_fixas; create policy cf_del on contas_fixas for delete to authenticated using (papel_em(barbearia_id) = 'dono');
+drop policy if exists la_sel on lancamentos; create policy la_sel on lancamentos for select to authenticated using (is_super() or papel_em(barbearia_id) = 'dono');
+drop policy if exists la_ins on lancamentos; create policy la_ins on lancamentos for insert to authenticated with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists la_upd on lancamentos; create policy la_upd on lancamentos for update to authenticated using (papel_em(barbearia_id) = 'dono') with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists la_del on lancamentos; create policy la_del on lancamentos for delete to authenticated using (papel_em(barbearia_id) = 'dono');
+
+grant select, insert, update, delete on contas_fixas, lancamentos to authenticated;
+grant all on contas_fixas, lancamentos to service_role;
+
+-- planos de fidelidade: o cliente paga um valor por mês e tem direito a N cortes no período
+create table if not exists pacotes (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  nome text not null check (char_length(nome) between 1 and 60),
+  descricao text not null default '' check (char_length(descricao) <= 160),
+  preco numeric(10,2) not null check (preco >= 0),
+  cortes int not null check (cortes between 1 and 31),
+  servicos text[] not null default '{}',
+  ativo boolean not null default true,
+  ordem int not null default 0,
+  criado_em timestamptz not null default now()
+);
+create index if not exists pac_idx on pacotes (barbearia_id, ordem);
+
+create table if not exists assinantes (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  pacote_id uuid references pacotes on delete set null,
+  nome text not null check (char_length(nome) between 2 and 60),
+  telefone text not null default '',
+  codigo text not null unique,
+  status text not null default 'pendente' check (status in ('pendente', 'ativa', 'cancelada')),
+  criado_em timestamptz not null default now()
+);
+create index if not exists ass_idx on assinantes (barbearia_id, status);
+
+create table if not exists assinatura_ciclos (
+  id uuid primary key default gen_random_uuid(),
+  barbearia_id uuid not null references barbearias on delete cascade,
+  assinante_id uuid not null references assinantes on delete cascade,
+  ini date not null,
+  fim date not null,
+  valor numeric(10,2) not null default 0,
+  criado_em timestamptz not null default now(),
+  check (fim > ini)
+);
+create index if not exists cic_idx on assinatura_ciclos (assinante_id, ini);
+
+alter table agendamentos add column if not exists assinante_id uuid references assinantes on delete set null;
+alter table agendamentos add column if not exists valor_ref numeric(10,2);
+
+alter table pacotes enable row level security;
+alter table assinantes enable row level security;
+alter table assinatura_ciclos enable row level security;
+drop policy if exists pc_sel on pacotes; create policy pc_sel on pacotes for select to authenticated using (is_super() or papel_em(barbearia_id) is not null);
+drop policy if exists pc_ins on pacotes; create policy pc_ins on pacotes for insert to authenticated with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists pc_upd on pacotes; create policy pc_upd on pacotes for update to authenticated using (papel_em(barbearia_id) = 'dono') with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists pc_del on pacotes; create policy pc_del on pacotes for delete to authenticated using (papel_em(barbearia_id) = 'dono');
+drop policy if exists as_sel on assinantes; create policy as_sel on assinantes for select to authenticated using (is_super() or papel_em(barbearia_id) is not null);
+drop policy if exists as_ins on assinantes; create policy as_ins on assinantes for insert to authenticated with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists as_upd on assinantes; create policy as_upd on assinantes for update to authenticated using (papel_em(barbearia_id) = 'dono') with check (papel_em(barbearia_id) = 'dono');
+drop policy if exists as_del on assinantes; create policy as_del on assinantes for delete to authenticated using (papel_em(barbearia_id) = 'dono');
+drop policy if exists ci_sel on assinatura_ciclos; create policy ci_sel on assinatura_ciclos for select to authenticated using (is_super() or papel_em(barbearia_id) = 'dono');
+drop policy if exists ci_del on assinatura_ciclos; create policy ci_del on assinatura_ciclos for delete to authenticated using (papel_em(barbearia_id) = 'dono');
+
+grant select, insert, update, delete on pacotes, assinantes to authenticated;
+grant select, delete on assinatura_ciclos to authenticated;
+grant all on pacotes, assinantes, assinatura_ciclos to service_role;
+
+create or replace function novo_codigo_plano() returns text language plpgsql volatile set search_path = public as $$
+declare c text; alfa text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+begin
+  loop
+    c := ''; for i in 1..6 loop c := c || substr(alfa, 1 + floor(random() * length(alfa))::int, 1); end loop;
+    exit when not exists (select 1 from assinantes where codigo = c);
+  end loop;
+  return c;
+end $$;
+
+-- usados no ciclo que contém a data (cancelado devolve o crédito; falta consome)
+create or replace function usados_no_ciclo(p_ass uuid, p_ini date, p_fim date) returns int language sql stable set search_path = public as $$
+  select count(*)::int from agendamentos where assinante_id = p_ass and data >= p_ini and data < p_fim and status in ('agendado', 'concluido', 'faltou') $$;
+
+create or replace function pedir_assinatura(p_slug text, p_pacote uuid, p_nome text, p_tel text) returns json
+language plpgsql security definer set search_path = public as $$
+declare b barbearias; pc pacotes; a assinantes; v_tel text := regexp_replace(coalesce(p_tel, ''), '\D', '', 'g');
+begin
+  select * into b from barbearias where slug = lower(p_slug);
+  if b.id is null or not liberada(b) then raise exception 'indisponivel'; end if;
+  select * into pc from pacotes where id = p_pacote and barbearia_id = b.id and ativo;
+  if pc.id is null then raise exception 'plano invalido'; end if;
+  if char_length(trim(coalesce(p_nome, ''))) < 2 then raise exception 'nome invalido'; end if;
+  if char_length(v_tel) < 10 then raise exception 'telefone invalido'; end if;
+  select * into a from assinantes where barbearia_id = b.id and telefone = v_tel and status <> 'cancelada' order by criado_em desc limit 1;
+  if a.id is not null then return json_build_object('codigo', a.codigo, 'status', a.status, 'existente', true); end if;
+  if (select count(*) from assinantes where barbearia_id = b.id and status = 'pendente' and criado_em > now() - interval '1 hour') > 30 then raise exception 'muitos pedidos'; end if;
+  insert into assinantes (barbearia_id, pacote_id, nome, telefone, codigo) values (b.id, pc.id, left(trim(p_nome), 60), v_tel, novo_codigo_plano()) returning * into a;
+  return json_build_object('codigo', a.codigo, 'status', a.status, 'existente', false);
+end $$;
+
+create or replace function meu_plano(p_slug text, p_codigo text) returns json
+language plpgsql stable security definer set search_path = public as $$
+declare b barbearias; a assinantes; pc pacotes; c assinatura_ciclos; v_fim date;
+begin
+  select * into b from barbearias where slug = lower(p_slug);
+  select * into a from assinantes where barbearia_id = b.id and codigo = upper(trim(p_codigo));
+  if a.id is null then return null; end if;
+  select * into pc from pacotes where id = a.pacote_id;
+  select * into c from assinatura_ciclos where assinante_id = a.id and ini <= hoje_br() and fim > hoje_br() order by ini desc limit 1;
+  select max(fim) into v_fim from assinatura_ciclos where assinante_id = a.id;
+  return json_build_object('nome', a.nome, 'status', a.status, 'codigo', a.codigo,
+    'pacote', case when pc.id is null then null else json_build_object('id', pc.id, 'nome', pc.nome, 'cortes', pc.cortes, 'servicos', pc.servicos, 'preco', pc.preco) end,
+    'ciclo_ini', c.ini, 'ciclo_fim', c.fim, 'valido_ate', v_fim,
+    'usados', case when c.id is null then 0 else usados_no_ciclo(a.id, c.ini, c.fim) end,
+    'ciclos', coalesce((select json_agg(json_build_object('ini', x.ini, 'fim', x.fim, 'usados', usados_no_ciclo(a.id, x.ini, x.fim)) order by x.ini)
+                        from assinatura_ciclos x where x.assinante_id = a.id and x.fim > hoje_br()), '[]'::json));
+end $$;
+
+create or replace function agendar_plano(p_slug text, p_servico text, p_prof uuid, p_nome text, p_tel text, p_data date, p_hora time, p_codigo text)
+returns json language plpgsql security definer set search_path = public as $$
+declare b barbearias; a assinantes; pc pacotes; c assinatura_ciclos; s jsonb; r json;
+begin
+  select * into b from barbearias where slug = lower(p_slug);
+  if b.id is null then raise exception 'indisponivel'; end if;
+  select * into a from assinantes where barbearia_id = b.id and codigo = upper(trim(p_codigo)) for update;
+  if a.id is null or a.status <> 'ativa' then raise exception 'plano invalido'; end if;
+  select * into pc from pacotes where id = a.pacote_id;
+  if pc.id is null then raise exception 'plano invalido'; end if;
+  if cardinality(pc.servicos) > 0 and not (p_servico = any(pc.servicos)) then raise exception 'plano nao cobre'; end if;
+  select * into c from assinatura_ciclos where assinante_id = a.id and ini <= p_data and fim > p_data order by ini desc limit 1;
+  if c.id is null then raise exception 'plano fora do periodo'; end if;
+  if usados_no_ciclo(a.id, c.ini, c.fim) >= pc.cortes then raise exception 'plano esgotado'; end if;
+  r := agendar(p_slug, p_servico, p_prof, p_nome, p_tel, p_data, p_hora);
+  select e into s from jsonb_array_elements(b.config->'servicos') e where e->>'id' = p_servico limit 1;
+  update agendamentos set preco = 0, valor_ref = coalesce((s->>'preco')::numeric, 0), assinante_id = a.id where id = (r->>'id')::uuid;
+  return r;
+end $$;
+
+-- dono: ativa ou renova por mais um mês (o novo período começa quando o anterior termina) e lança a entrada no financeiro
+create or replace function renovar_assinante(p_id uuid, p_valor numeric, p_lancar boolean default true) returns json
+language plpgsql security definer set search_path = public as $$
+declare a assinantes; pc pacotes; v_ini date; v_fim date;
+begin
+  select * into a from assinantes where id = p_id for update;
+  if a.id is null or papel_em(a.barbearia_id) is distinct from 'dono' then raise exception 'sem permissao'; end if;
+  select * into pc from pacotes where id = a.pacote_id;
+  if pc.id is null then raise exception 'plano invalido'; end if;
+  select greatest(hoje_br(), coalesce(max(fim), hoje_br())) into v_ini from assinatura_ciclos where assinante_id = a.id;
+  v_fim := (v_ini + interval '1 month')::date;
+  insert into assinatura_ciclos (barbearia_id, assinante_id, ini, fim, valor) values (a.barbearia_id, a.id, v_ini, v_fim, coalesce(p_valor, pc.preco));
+  update assinantes set status = 'ativa' where id = a.id;
+  if p_lancar and coalesce(p_valor, pc.preco) > 0 then
+    insert into lancamentos (barbearia_id, tipo, descricao, categoria, valor, data, pago)
+    values (a.barbearia_id, 'entrada', left(pc.nome || ' - ' || a.nome, 80), 'Planos de fidelidade', coalesce(p_valor, pc.preco), hoje_br(), true);
+  end if;
+  return json_build_object('ini', v_ini, 'fim', v_fim);
+end $$;
+
+create or replace function dados_publicos(p_slug text) returns json language sql stable security definer set search_path = public as $$
+  select json_build_object(
+    'b', json_build_object('id', b.id, 'slug', b.slug, 'nome', b.nome, 'status', b.status, 'vence_em', b.vence_em, 'config', b.config),
+    'profs', coalesce((select json_agg(json_build_object('id', p.id, 'nome', p.nome, 'dias', p.dias) order by p.ordem, p.nome)
+                       from profissionais p where p.barbearia_id = b.id and p.ativo), '[]'::json),
+    'produtos', coalesce((select json_agg(json_build_object('id', x.id, 'nome', x.nome, 'descricao', x.descricao, 'preco', x.preco,
+                       'foto_v', x.foto_v, 'esgotado', x.estoque is not null and x.estoque = 0) order by x.ordem, x.nome)
+                       from produtos x where x.barbearia_id = b.id and x.ativo), '[]'::json),
+    'pacotes', coalesce((select json_agg(json_build_object('id', k.id, 'nome', k.nome, 'descricao', k.descricao, 'preco', k.preco,
+                       'cortes', k.cortes, 'servicos', k.servicos) order by k.ordem, k.preco)
+                       from pacotes k where k.barbearia_id = b.id and k.ativo), '[]'::json))
+  from barbearias b where b.slug = lower(p_slug) $$;
+
+revoke all on function novo_codigo_plano(), usados_no_ciclo(uuid, date, date) from public, anon, authenticated;
+revoke all on function pedir_assinatura(text, uuid, text, text), meu_plano(text, text),
+  agendar_plano(text, text, uuid, text, text, date, time, text), renovar_assinante(uuid, numeric, boolean) from public;
+grant execute on function pedir_assinatura(text, uuid, text, text), meu_plano(text, text),
+  agendar_plano(text, text, uuid, text, text, date, time, text) to anon, authenticated;
+grant execute on function renovar_assinante(uuid, numeric, boolean) to authenticated;
+grant execute on function dados_publicos(text) to anon, authenticated;

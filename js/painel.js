@@ -4,7 +4,7 @@
   const app = () => $("#app");
   const ROT = { agendado: "Agendado", concluido: "Concluído", cancelado: "Cancelado", faltou: "Faltou" };
   const STATUS = { teste: "Teste grátis", ativa: "Ativa", carencia: "Pagamento pendente", bloqueada: "Bloqueada", teste_vencido: "Teste encerrado", vencida: "Vencida" };
-  let ctx = null, aba = "agenda", dia = U.hoje(), filtroProf = "", periodo = "30", timer = null, conhecidos = null;
+  let ctx = null, aba = "agenda", dia = U.hoje(), filtroProf = "", periodo = "30", timer = null, conhecidos = null, modoAg = "dia", diasProx = 14, subRel = "fin", mesFin = U.hoje().slice(0, 7);
   const dono = () => ctx.papel === "dono" || ctx.papel === "super";
   const cfg = () => ctx.b.config;
   const nomeProf = id => (ctx.profs.find(p => p.id === id) || {}).nome || "—";
@@ -100,7 +100,7 @@
     const tabs = dono()
       ? [{ id: "agenda", txt: "Agenda" }, { id: "bloq", txt: "Bloqueios" }, { id: "rel", txt: "Relatórios" }, { id: "cli", txt: "Clientes" }, { id: "mais", txt: "Mais" }]
       : [{ id: "agenda", txt: "Agenda" }, { id: "bloq", txt: "Folgas" }, { id: "rel", txt: "Ganhos" }, { id: "cli", txt: "Clientes" }, { id: "mais", txt: "Mais" }];
-    const extras = ["equipe", "serv", "prod", "hor", "assin", "aj"];
+    const extras = ["equipe", "serv", "prod", "plan", "hor", "assin", "aj"];
     const ic = U.iconesDe(ctx.bid, cfg().logo);
     U.moldura({ marca: ctx.b.nome, marcaHref: "/painel", tabs, ativo: extras.includes(aba) ? "mais" : aba, logo: ic && ic.i192,
       acoes: `<a class="btn btn-mini btn-claro" href="/${esc(ctx.b.slug)}" data-link>Ver página</a>` });
@@ -116,19 +116,19 @@
       if (dias <= 7) aviso = `<div class="aviso">Teste grátis: ${dias === 0 ? "termina hoje" : dias === 1 ? "falta 1 dia" : `faltam ${dias} dias`}. <button class="lnk" data-ir="assin">Assinar agora</button></div>`;
     }
     const titulos = { agenda: "Agenda", bloq: dono() ? "Bloqueios e folgas" : "Minhas folgas", rel: dono() ? "Relatórios" : "Meus ganhos", cli: "Clientes", prod: "Produtos à venda",
-      equipe: "Equipe", serv: "Serviços", hor: "Horários", assin: "Assinatura", aj: "Ajustes" };
+      equipe: "Equipe", serv: "Serviços", plan: "Planos de fidelidade", hor: "Horários", assin: "Assinatura", aj: "Ajustes" };
     app().innerHTML = `<div class="p-top"><h1>${titulos[aba]}</h1>${!dono() ? `<span class="tag">Barbeiro · ${esc(nomeProf(ctx.prof_id))}</span>` : ""}</div>
       <div class="p-sec">${aviso}<div id="pc"></div></div>`;
     app().querySelectorAll("[data-ir]").forEach(b => b.onclick = () => { aba = b.dataset.ir; desenhar(); });
-    const fn = { agenda, bloq, rel, cli, equipe, serv, prod, hor, assin, aj }[aba];
-    if ((["equipe", "serv", "prod", "hor", "assin", "aj"].includes(aba)) && !dono()) { aba = "agenda"; return desenhar(); }
+    const fn = { agenda, bloq, rel, cli, equipe, serv, prod, plan, hor, assin, aj }[aba];
+    if ((["equipe", "serv", "prod", "plan", "hor", "assin", "aj"].includes(aba)) && !dono()) { aba = "agenda"; return desenhar(); }
     fn();
   }
   const box = () => $("#pc");
 
   function menuMais() {
     const it = dono()
-      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços, preços e fotos"], ["prod", "Produtos à venda"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Capa, ícone, dados, link e QR Code"]]
+      ? [["equipe", "Equipe e acessos"], ["serv", "Serviços, preços e fotos"], ["prod", "Produtos à venda"], ["plan", "Planos de fidelidade"], ["hor", "Horários de funcionamento"], ["assin", "Assinatura"], ["aj", "Capa, ícone, dados, link e QR Code"]]
       : [];
     const b = U.modal(`<h2>${esc(ctx.b.nome)}</h2><p style="color:var(--mut);margin-top:-8px">${esc((S.usuario() || {}).email)} · ${dono() ? "Dono" : "Barbeiro"}</p>
       <div class="menu">${it.map(([k, t]) => `<button data-k="${k}">${t}</button>`).join("")}
@@ -149,73 +149,181 @@
   }
 
   async function agenda() {
-    box().innerHTML = `<div class="dia-nav"><button class="btn btn-sec" id="dAnt" aria-label="Dia anterior">‹</button>
-      <input type="date" id="dSel" value="${dia}" aria-label="Data"><button class="btn btn-sec" id="dProx" aria-label="Próximo dia">›</button></div>
-      <div class="seg"><button class="btn btn-mini btn-sec" id="dHoje">Hoje</button><button class="btn btn-mini" id="dEnc">+ Encaixe</button>${temProdutos() ? `<button class="btn btn-mini btn-sec" id="dVenda">+ Venda avulsa</button>` : ""}</div>
-      ${dono() && ctx.profs.filter(p => p.ativo).length > 1 ? `<div class="seg chips-filtro" id="fProf">${[{ id: "", nome: "Todos" }].concat(ctx.profs.filter(p => p.ativo)).map(p => `<button class="chip ${filtroProf === p.id ? "on" : ""}" data-p="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>` : ""}
-      <div id="aKpis" class="kpis"></div><h2 id="aTit"></h2><div id="aLista"><p class="vazio">Carregando…</p></div>`;
-    const ir = d => { dia = d; agenda(); };
-    $("#dAnt").onclick = () => ir(A.addDays(dia, -1)); $("#dProx").onclick = () => ir(A.addDays(dia, 1));
-    $("#dHoje").onclick = () => ir(U.hoje()); $("#dSel").onchange = e => e.target.value && ir(e.target.value);
-    $("#dEnc").onclick = encaixe;
-    const dv = $("#dVenda"); if (dv) dv.onclick = () => vender(null);
+    const profsAt = ctx.profs.filter(p => p.ativo);
+    box().innerHTML = `<div class="seg ag-modo" id="agModo" role="tablist"><button class="chip ${modoAg === "dia" ? "on" : ""}" data-m="dia" role="tab" aria-selected="${modoAg === "dia"}">Dia</button><button class="chip ${modoAg === "prox" ? "on" : ""}" data-m="prox" role="tab" aria-selected="${modoAg === "prox"}">Próximos dias</button></div>
+      ${dono() && profsAt.length > 1 ? `<div class="seg chips-filtro" id="fProf">${[{ id: "", nome: "Todos" }].concat(profsAt).map(p => `<button class="chip chip-sm ${filtroProf === p.id ? "on" : ""}" data-p="${esc(p.id)}">${esc(p.nome)}</button>`).join("")}</div>` : ""}
+      <div id="agCorpo"></div>`;
+    $("#agModo").onclick = e => { const b = e.target.closest("[data-m]"); if (b && b.dataset.m !== modoAg) { modoAg = b.dataset.m; agenda(); } };
     const fp = $("#fProf"); if (fp) fp.onclick = e => { const b = e.target.closest("[data-p]"); if (b) { filtroProf = b.dataset.p; agenda(); } };
+    if (modoAg === "prox") return proximos();
+    $("#agCorpo").innerHTML = `<div class="dia-topo">
+        <button class="btn btn-sec dia-seta" id="dAnt" aria-label="Dia anterior">‹</button>
+        <button class="dia-tit" id="dTit" type="button" aria-label="Escolher data"><b id="aTit"></b><small id="aSub"></small></button>
+        <input type="date" id="dSel" value="${dia}" tabindex="-1" aria-hidden="true">
+        <button class="btn btn-sec dia-seta" id="dProx" aria-label="Próximo dia">›</button></div>
+      <div class="seg ag-atalhos">${dia !== U.hoje() ? `<button class="btn btn-mini btn-sec" id="dHoje">Voltar para hoje</button>` : ""}<button class="btn btn-mini" id="dEnc">+ Encaixe</button>${temProdutos() ? `<button class="btn btn-mini btn-sec" id="dVenda">+ Venda avulsa</button>` : ""}</div>
+      <div id="aProx"></div><div id="aResumo" class="ag-resumo"></div><div id="aLista"><p class="vazio">Carregando…</p></div>`;
+    const ir = d => { dia = d; agenda(); }, sel = $("#dSel");
+    $("#dAnt").onclick = () => ir(A.addDays(dia, -1)); $("#dProx").onclick = () => ir(A.addDays(dia, 1));
+    $("#dTit").onclick = () => { try { sel.showPicker(); } catch { sel.focus(); sel.click(); } };
+    sel.onchange = e => e.target.value && ir(e.target.value);
+    const dh = $("#dHoje"); if (dh) dh.onclick = () => ir(U.hoje());
+    $("#dEnc").onclick = () => encaixe();
+    const dv = $("#dVenda"); if (dv) dv.onclick = () => vender(null);
     await listaDia();
-    timer = setInterval(() => { if (!document.hidden && aba === "agenda" && U.partes()[0] === "painel") listaDia(true); }, 30000);
+    timer = setInterval(() => { if (!document.hidden && aba === "agenda" && modoAg === "dia" && U.partes()[0] === "painel") listaDia(true); }, 30000);
   }
+
+  const relDia = d => d === U.hoje() ? "Hoje" : d === A.addDays(U.hoje(), 1) ? "Amanhã" : d === A.addDays(U.hoje(), -1) ? "Ontem" : "";
+  const agoraMin = () => { const n = new Date(); return n.getHours() * 60 + n.getMinutes(); };
+  const faltaTxt = m => m <= 0 ? "agora" : m < 60 ? `em ${m} min` : `em ${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, "0") : ""}`;
+
+  // espaços livres do dia (só quando dá pra saber de qual barbeiro)
+  function livresDoDia(ags, blq, profId) {
+    const h = cfg().horarios[A.dow(dia)], prof = ctx.profs.find(p => p.id === profId);
+    if (!h || !h.aberto || !prof || !A.trabalha(prof, dia) || dia < U.hoje()) return [];
+    if (blq.some(b => !b.ini && (!b.prof_id || b.prof_id === profId))) return [];
+    const T = A.toMin, janelas = h.almocoIni && h.almocoFim ? [[T(h.abre), T(h.almocoIni)], [T(h.almocoFim), T(h.fecha)]] : [[T(h.abre), T(h.fecha)]];
+    const ocup = ags.filter(a => a.prof_id === profId && ["agendado", "concluido"].includes(a.status)).map(a => [T(a.hora), T(a.hora) + a.dur])
+      .concat(blq.filter(b => b.ini && (!b.prof_id || b.prof_id === profId)).map(b => [T(b.ini), T(b.fim)])).sort((x, y) => x[0] - y[0]);
+    const minimo = dia === U.hoje() ? Math.ceil(agoraMin() / 5) * 5 : 0, passo = Math.max(15, cfg().intervalo || 30), out = [];
+    janelas.forEach(([ini, fim]) => {
+      let t = Math.max(ini, minimo);
+      ocup.forEach(([oi, of]) => { if (of <= t || oi >= fim) return; if (oi - t >= passo) out.push([t, Math.min(oi, fim)]); t = Math.max(t, of); });
+      if (fim - t >= passo) out.push([t, fim]);
+    });
+    return out.map(([i, f]) => ({ ini: A.toHM(i), fim: A.toHM(f) }));
+  }
+
   async function listaDia(silencioso) {
     let ags, blq, vendas;
     const pf = dono() ? filtroProf : ctx.prof_id;
     try { [ags, blq, vendas] = await Promise.all([S.listar(ctx.bid, dia, dia, pf || undefined), S.bloqueios(ctx.bid, dia), S.vendas(ctx.bid, dia, dia, pf || undefined).catch(() => [])]); }
-    catch (e) { if (!silencioso && box()) box().querySelector("#aLista").innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
-    if (!$("#aKpis")) return;
+    catch (e) { if (!silencioso && $("#aLista")) $("#aLista").innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
+    if (!$("#aLista")) return;
     novosAvisos(ags);
     blq = blq.filter(b => b.data === dia && (!pf || !b.prof_id || b.prof_id === pf));
-    const ativos = ags.filter(a => a.status !== "cancelado");
-    const fat = ags.filter(a => a.status === "concluido").reduce((s, a) => s + a.preco, 0), prev = ags.filter(a => a.status === "agendado").reduce((s, a) => s + a.preco, 0);
+    const r = relDia(dia);
+    $("#aTit").textContent = r || cap(fmtData(dia, true).split(",")[0]);
+    $("#aSub").textContent = r ? fmtData(dia, true) : fmtData(dia, true).split(",").slice(1).join(",").trim();
+
+    const vivos = ags.filter(a => a.status === "agendado" || a.status === "concluido");
+    const recebido = ags.filter(a => a.status === "concluido").reduce((s, a) => s + a.preco, 0), aReceber = ags.filter(a => a.status === "agendado").reduce((s, a) => s + a.preco, 0);
     const totProd = vendas.reduce((t, v) => t + v.preco * v.qtd, 0);
-    $("#aKpis").innerHTML = `<div class="kpi"><small>Atendimentos</small><b>${ativos.length}</b></div><div class="kpi"><small>Serviços recebidos</small><b>${money(fat)}</b></div>
-      <div class="kpi"><small>A receber</small><b>${money(prev)}</b></div>${totProd ? `<div class="kpi"><small>Produtos vendidos</small><b>${money(totProd)}</b></div>` : ""}`;
-    const linhaVendas = vs => vs.length ? `<div class="vendas-ag">${vs.map(v => `<span>${esc(v.produto_nome)}${v.qtd > 1 ? " ×" + v.qtd : ""} · ${money(v.preco * v.qtd)} <button class="lnk sutil" data-desfazer="${esc(v.id)}" aria-label="Desfazer venda de ${esc(v.produto_nome)}">desfazer</button></span>`).join("")}</div>` : "";
-    const avulsas = vendas.filter(v => !v.agendamento_id);
-    $("#aTit").textContent = cap(fmtData(dia, true));
-    const h = cfg().horarios[A.dow(dia)], mostraProf = dono() && !filtroProf && ctx.profs.length > 1;
-    const itens = ags.map(a => ({ t: a.hora, tipo: "ag", a })).concat(blq.map(b => ({ t: b.ini || "00:00", tipo: "blq", b })));
+    $("#aResumo").innerHTML = `<span><b>${vivos.length}</b> ${vivos.length === 1 ? "cliente" : "clientes"}</span><span><b>${money(recebido)}</b> recebido</span><span><b>${money(aReceber)}</b> a receber</span>${totProd ? `<span><b>${money(totProd)}</b> em produtos</span>` : ""}`;
+
+    const ehHoje = dia === U.hoje(), agora = agoraMin(), T = A.toMin;
+    const pend = ags.filter(a => a.status === "agendado").sort((x, y) => x.hora.localeCompare(y.hora));
+    const prox = ehHoje ? pend.find(a => T(a.hora) + a.dur > agora) : null;
+    const mostraProf = dono() && !filtroProf && ctx.profs.length > 1;
+    $("#aProx").innerHTML = prox ? `<div class="prox-card" data-id="${esc(prox.id)}"><small>${T(prox.hora) <= agora ? "Atendendo agora" : "Próximo cliente · " + faltaTxt(T(prox.hora) - agora)}</small>
+        <div class="pxc-l"><b class="pxc-h">${esc(prox.hora)}</b><div><b class="pxc-n">${esc(prox.nome)}</b><span>${esc(prox.servico_nome)} · ${prox.assinante_id ? "pelo plano" : money(prox.preco)}${mostraProf ? " · " + esc(nomeProf(prox.prof_id)) : ""}</span></div></div>
+        <div class="acoes"><button class="btn btn-mini btn-ok" data-s="concluido">Concluir</button><button class="btn btn-mini btn-sec" data-abrir>Mais opções</button>${prox.telefone ? `<a class="btn btn-mini btn-sec" target="_blank" rel="noopener" href="${esc(wa(prox.telefone, `Olá ${prox.nome}! Seu horário na ${ctx.b.nome} é hoje às ${prox.hora}.`))}">WhatsApp</a>` : ""}</div></div>`
+      : (ehHoje && vivos.length && !pend.length ? `<p class="aviso ok-aviso">Todos os clientes de hoje foram atendidos.</p>` : "");
+
+    const profLivre = pf || (ctx.profs.filter(p => p.ativo).length === 1 ? ctx.profs.filter(p => p.ativo)[0].id : "");
+    const h = cfg().horarios[A.dow(dia)];
+    const itens = ags.filter(a => a.status !== "cancelado").map(a => ({ t: a.hora, tipo: "ag", a }))
+      .concat(blq.map(b => ({ t: b.ini || "00:00", tipo: "blq", b })))
+      .concat(profLivre ? livresDoDia(ags, blq, profLivre).map(l => ({ t: l.ini, tipo: "livre", l })) : []);
     if (h && h.aberto && h.almocoIni) itens.push({ t: h.almocoIni, tipo: "alm" });
-    itens.sort((x, y) => x.t.localeCompare(y.t));
+    itens.sort((x, y) => x.t.localeCompare(y.t) || (x.tipo === "livre") - (y.tipo === "livre"));
+    const canc = ags.filter(a => a.status === "cancelado"), avulsas = vendas.filter(v => !v.agendamento_id);
     const lista = $("#aLista");
-    if (!itens.length && !avulsas.length) { lista.innerHTML = `<p class="vazio">${h && h.aberto ? "Nenhum agendamento neste dia." : "Barbearia fechada neste dia."}</p>`; return; }
-    lista.innerHTML = itens.map(i => {
-      if (i.tipo === "alm") return `<div class="ag-item livre"><div class="h">${esc(h.almocoIni)}<small>até ${esc(h.almocoFim)}</small></div><div class="n">Pausa / almoço</div></div>`;
-      if (i.tipo === "blq") return `<div class="ag-item livre"><div class="h">${i.b.ini ? esc(i.b.ini) : "Dia"}<small>${i.b.ini ? "até " + esc(i.b.fim) : "inteiro"}</small></div><div class="n">Bloqueado${i.b.prof_id ? " · " + esc(nomeProf(i.b.prof_id)) : ""}${i.b.motivo ? " · " + esc(i.b.motivo) : ""}</div></div>`;
-      const a = i.a;
-      return `<div class="ag-item st-${esc(a.status)}" data-id="${esc(a.id)}"><div class="h">${esc(a.hora)}<small>${esc(durTxt(a.dur))}</small></div>
-        <div><b>${esc(a.nome)}</b> <span class="tag ${esc(a.status)}">${esc(ROT[a.status] || a.status)}</span><br>
-        <span class="sub">${esc(a.servico_nome)} · ${money(a.preco)}${mostraProf ? ` · <b>${esc(nomeProf(a.prof_id))}</b>` : ""}${a.origem === "encaixe" ? " · encaixe" : ""}</span>${linhaVendas(vendas.filter(v => v.agendamento_id === a.id))}</div>
-        <div class="acoes">${a.status === "agendado" ? `<button class="btn btn-mini btn-ok" data-s="concluido">Concluir</button><button class="btn btn-mini btn-sec" data-s="faltou">Faltou</button><button class="btn btn-mini btn-sec" data-s="cancelado">Cancelar</button>`
-          : `<button class="btn btn-mini btn-sec" data-s="agendado">Desfazer</button>`}
-          ${temProdutos() && !["cancelado", "faltou"].includes(a.status) ? `<button class="btn btn-mini btn-sec" data-venda="${esc(a.id)}">+ Produto</button>` : ""}
-          ${a.telefone ? `<a class="btn btn-mini btn-sec" target="_blank" rel="noopener" href="${esc(wa(a.telefone, `Olá ${a.nome}! Confirmando seu horário na ${ctx.b.nome}: ${fmtData(a.data)} às ${a.hora}.`))}">WhatsApp</a>` : ""}</div></div>`;
-    }).join("") + (avulsas.length ? `<h3 class="tit-avulsas">Vendas avulsas</h3>${avulsas.map(v => `<div class="cli"><div><b>${esc(v.produto_nome)}${v.qtd > 1 ? " ×" + v.qtd : ""}</b><small>${money(v.preco * v.qtd)}${ctx.profs.length > 1 ? " · " + esc(nomeProf(v.prof_id)) : ""}</small></div><button class="btn btn-mini btn-sec" data-desfazer="${esc(v.id)}">Desfazer</button></div>`).join("")}` : "");
-    lista.onclick = async e => {
-      const bv = e.target.closest("[data-venda]"); if (bv) return vender(bv.dataset.venda);
+    if (!itens.some(i => i.tipo === "ag" || i.tipo === "livre" || i.tipo === "blq") && !canc.length && !avulsas.length) {
+      lista.innerHTML = `<p class="vazio">${h && h.aberto ? "Nenhum agendamento neste dia." : "Barbearia fechada neste dia."}</p>`; lista.onclick = null; return;
+    }
+    const linha = a => {
+      const atras = ehHoje && a.status === "agendado" && T(a.hora) + a.dur <= agora, vs = vendas.filter(v => v.agendamento_id === a.id);
+      return `<div class="ag-row st-${esc(a.status)}${atras ? " atrasado" : ""}" data-id="${esc(a.id)}" role="button" tabindex="0" aria-label="${esc(a.hora)}, ${esc(a.nome)}, ${esc(ROT[a.status] || a.status)}">
+        <span class="ag-h">${esc(a.hora)}<small>${esc(durTxt(a.dur))}</small></span>
+        <span class="ag-info"><b>${esc(a.nome)}</b><small>${esc(a.servico_nome)} · ${a.assinante_id ? `<span class="tag-plano">Plano</span>` : money(a.preco)}${mostraProf ? " · " + esc(nomeProf(a.prof_id)) : ""}${a.origem === "encaixe" ? " · encaixe" : ""}</small>
+          ${atras ? `<em class="ag-atras">Passou do horário. Concluir?</em>` : ""}${vs.length ? `<small class="ag-vendas">+ ${vs.map(v => esc(v.produto_nome) + (v.qtd > 1 ? " ×" + v.qtd : "")).join(", ")}</small>` : ""}</span>
+        ${a.status === "agendado" ? `<button class="ag-ok" data-s="concluido" aria-label="Concluir atendimento de ${esc(a.nome)}">✓</button>` : `<span class="tag ${esc(a.status)}">${esc(ROT[a.status])}</span>`}</div>`;
+    };
+    lista.innerHTML = `<div class="linha-tempo">${itens.map(i => {
+      if (i.tipo === "ag") return linha(i.a);
+      if (i.tipo === "alm") return `<div class="ag-row ag-pausa"><span class="ag-h">${esc(h.almocoIni)}<small>até ${esc(h.almocoFim)}</small></span><span class="ag-info"><small>Pausa / almoço</small></span></div>`;
+      if (i.tipo === "blq") return `<div class="ag-row ag-pausa"><span class="ag-h">${i.b.ini ? esc(i.b.ini) : "Dia"}<small>${i.b.ini ? "até " + esc(i.b.fim) : "inteiro"}</small></span><span class="ag-info"><small>Bloqueado${i.b.prof_id ? " · " + esc(nomeProf(i.b.prof_id)) : ""}${i.b.motivo ? " · " + esc(i.b.motivo) : ""}</small></span></div>`;
+      return `<button class="ag-row ag-livre" data-encaixe="${esc(i.l.ini)}"><span class="ag-h">${esc(i.l.ini)}</span><span class="ag-info"><small>Livre até ${esc(i.l.fim)}</small></span><span class="ag-mais">+ Encaixar</span></button>`;
+    }).join("")}</div>
+      ${canc.length ? `<details class="ag-canc"><summary>${canc.length} ${canc.length === 1 ? "cancelado" : "cancelados"}</summary>${canc.map(linha).join("")}</details>` : ""}
+      ${avulsas.length ? `<h3 class="tit-avulsas">Vendas avulsas</h3>${avulsas.map(v => `<div class="cli"><div><b>${esc(v.produto_nome)}${v.qtd > 1 ? " ×" + v.qtd : ""}</b><small>${money(v.preco * v.qtd)}${ctx.profs.length > 1 ? " · " + esc(nomeProf(v.prof_id)) : ""}</small></div><button class="btn btn-mini btn-sec" data-desfazer="${esc(v.id)}">Desfazer</button></div>`).join("")}` : ""}`;
+
+    const acao = async e => {
+      const enc = e.target.closest("[data-encaixe]"); if (enc) return encaixe(enc.dataset.encaixe);
       const bd = e.target.closest("[data-desfazer]");
       if (bd) { try { await S.desfazerVenda(bd.dataset.desfazer); ctx.produtos = await S.produtos(ctx.bid).catch(() => ctx.produtos); U.toast("Venda desfeita."); listaDia(); } catch (err) { U.toast(err.message); } return; }
-      const b = e.target.closest("[data-s]"); if (!b) return;
-      try { await S.atualizar(ctx.bid, b.closest("[data-id]").dataset.id, { status: b.dataset.s }); U.toast("Atualizado."); listaDia(); } catch (err) { U.toast(err.message); }
+      const card = e.target.closest("[data-id]"); if (!card) return;
+      const a = ags.find(x => x.id === card.dataset.id);
+      const bs = e.target.closest("[data-s]");
+      if (bs) { try { await S.atualizar(ctx.bid, a.id, { status: bs.dataset.s }); U.toast(bs.dataset.s === "concluido" ? `${a.nome}: atendimento concluído.` : "Atualizado."); listaDia(); } catch (err) { U.toast(err.message); } return; }
+      if (e.target.closest("a")) return;
+      abrirAg(a, vendas.filter(v => v.agendamento_id === a.id), listaDia);
     };
+    lista.onclick = acao; $("#aProx").onclick = acao;
+    lista.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches(".ag-row[data-id]")) { e.preventDefault(); acao(e); } };
+  }
+
+  // detalhes do atendimento, com todas as ações
+  function abrirAg(a, vs, depois) {
+    const b = U.modal(`<div id="agDet"><h2>${esc(a.nome)}</h2>
+      <p class="ag-det">${esc(cap(fmtData(a.data, true)))} · <b>${esc(a.hora)}</b> (${esc(durTxt(a.dur))})<br>${esc(a.servico_nome)} · ${a.assinante_id ? "pelo plano (já pago)" : money(a.preco)}${ctx.profs.length > 1 ? " · " + esc(nomeProf(a.prof_id)) : ""}
+        <br><span class="tag ${esc(a.status)}">${esc(ROT[a.status] || a.status)}</span>${a.origem === "encaixe" ? ` <span class="tag">Encaixe</span>` : a.origem === "online" ? ` <span class="tag">Agendou online</span>` : ""}${a.telefone ? `<br>WhatsApp: ${esc(a.telefone)}` : ""}</p>
+      ${vs.length ? `<div class="vendas-ag">${vs.map(v => `<span>${esc(v.produto_nome)}${v.qtd > 1 ? " ×" + v.qtd : ""} · ${money(v.preco * v.qtd)} <button class="lnk sutil" data-desfazer="${esc(v.id)}">desfazer</button></span>`).join("")}</div>` : ""}
+      <div class="menu">${a.status === "agendado" ? `<button data-s="concluido">Concluir atendimento</button><button data-s="faltou">Cliente faltou</button><button data-s="cancelado" class="perigo">Cancelar horário</button>` : `<button data-s="agendado">Desfazer (voltar para agendado)</button>`}
+        ${temProdutos() && !["cancelado", "faltou"].includes(a.status) ? `<button data-produto>Adicionar produto vendido</button>` : ""}
+        ${a.telefone ? `<a target="_blank" rel="noopener" href="${esc(wa(a.telefone, `Olá ${a.nome}! Confirmando seu horário na ${ctx.b.nome}: ${fmtData(a.data)} às ${a.hora}.`))}">Mandar WhatsApp</a>` : ""}
+        <button data-fechar>Fechar</button></div></div>`);
+    b.querySelector("#agDet").onclick = async e => {
+      if (e.target.closest("[data-produto]")) { U.fecharModal(); return vender(a.id); }
+      const bd = e.target.closest("[data-desfazer]");
+      if (bd) { try { await S.desfazerVenda(bd.dataset.desfazer); ctx.produtos = await S.produtos(ctx.bid).catch(() => ctx.produtos); U.fecharModal(); U.toast("Venda desfeita."); depois(); } catch (err) { U.toast(err.message); } return; }
+      const bs = e.target.closest("[data-s]"); if (!bs) return;
+      try { await S.atualizar(ctx.bid, a.id, { status: bs.dataset.s }); U.fecharModal(); U.toast("Atualizado."); depois(); } catch (err) { U.toast(err.message); }
+    };
+  }
+
+  async function proximos() {
+    const corpo = $("#agCorpo"), ini = U.hoje(), fim = A.addDays(ini, diasProx - 1), pf = dono() ? filtroProf : ctx.prof_id;
+    corpo.innerHTML = `<p class="vazio">Carregando…</p>`;
+    let ags, blq;
+    try { [ags, blq] = await Promise.all([S.listar(ctx.bid, ini, fim, pf || undefined), S.bloqueios(ctx.bid, ini)]); }
+    catch (e) { corpo.innerHTML = `<p class="erro">${esc(e.message)}</p>`; return; }
+    if (!$("#agCorpo")) return;
+    const vivos = ags.filter(a => a.status !== "cancelado").sort((x, y) => (x.data + x.hora).localeCompare(y.data + y.hora));
+    const dias = Array.from({ length: diasProx }, (_, i) => A.addDays(ini, i));
+    const doDia = d => vivos.filter(a => a.data === d), mostraProf = dono() && !filtroProf && ctx.profs.length > 1;
+    const prev = vivos.filter(a => a.status === "agendado").reduce((s, a) => s + a.preco, 0);
+    const fechado = d => { const h = cfg().horarios[A.dow(d)]; return !h || !h.aberto; };
+    const blqDia = d => blq.some(b => b.data === d && !b.ini && (!pf || !b.prof_id || b.prof_id === pf));
+    corpo.innerHTML = `<div class="semana">${dias.slice(0, 7).map(d => { const n = doDia(d).length;
+        return `<button class="sem-dia${d === ini ? " hoje" : ""}${fechado(d) ? " fechado" : ""}" data-d="${d}" aria-label="${esc(fmtData(d, true))}: ${n} agendamentos"><small>${DIAS[A.dow(d)].slice(0, 3)}</small><b>${Number(d.slice(8))}</b><i>${n || ""}</i></button>`; }).join("")}</div>
+      <div class="ag-resumo"><span><b>${vivos.length}</b> ${vivos.length === 1 ? "agendamento" : "agendamentos"}</span><span><b>${money(prev)}</b> previsto</span><span>próximos ${diasProx} dias</span></div>
+      <div class="px-lista">${dias.map(d => { const l = doDia(d), r = relDia(d), soma = l.reduce((s, a) => s + a.preco, 0);
+        return `<section class="px-dia"><header data-d="${d}"><div><b>${r || cap(fmtData(d, true).split(",")[0])}</b><small>${esc(fmtData(d, true).split(",").slice(1).join(",").trim())}</small></div><span>${l.length ? `${l.length} ${l.length === 1 ? "cliente" : "clientes"} · ${money(soma)}` : ""}</span></header>
+          ${l.length ? l.map(a => `<div class="px-item st-${esc(a.status)}" data-id="${esc(a.id)}" role="button" tabindex="0"><span class="ag-h">${esc(a.hora)}</span><span class="ag-info"><b>${esc(a.nome)}</b><small>${esc(a.servico_nome)}${a.assinante_id ? " · plano" : ""}${mostraProf ? " · " + esc(nomeProf(a.prof_id)) : ""}</small></span>${a.status !== "agendado" ? `<span class="tag ${esc(a.status)}">${esc(ROT[a.status])}</span>` : ""}</div>`).join("")
+            : `<p class="px-vazio">${fechado(d) ? "Fechado" : blqDia(d) ? "Bloqueado" : "Nenhum agendamento"}</p>`}</section>`; }).join("")}</div>
+      ${diasProx < 60 ? `<button class="btn btn-sec btn-bloco" id="pxMais">Ver mais 14 dias</button>` : ""}`;
+    corpo.onclick = e => {
+      if (e.target.closest("#pxMais")) { diasProx += 14; return proximos(); }
+      const d = e.target.closest("[data-d]"); if (d) { dia = d.dataset.d; modoAg = "dia"; return agenda(); }
+      const it = e.target.closest("[data-id]"); if (it) abrirAg(vivos.find(a => a.id === it.dataset.id), [], proximos);
+    };
+    corpo.onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-id]")) { e.preventDefault(); corpo.onclick(e); } };
   }
   function novosAvisos(ags) {
     const ids = new Set(ags.map(a => a.id));
-    if (conhecidos && conhecidos.dia === dia) {
+    const chave = dia + "|" + filtroProf;
+    if (conhecidos && conhecidos.dia === chave) {
       const n = ags.find(a => !conhecidos.ids.has(a.id) && a.origem === "online");
       if (n) { const txt = `Novo agendamento: ${n.nome} às ${n.hora}`; U.toast(txt);
         try { if (Notification.permission === "granted") navigator.serviceWorker.ready.then(r => r.showNotification(ctx.b.nome, { body: txt, icon: U.url("/icons/icon-192.png"), tag: n.id })); } catch {} }
     }
-    conhecidos = { dia, ids };
+    conhecidos = { dia: chave, ids };
   }
-  function encaixe() {
-    const n = new Date(), hr = A.toHM(Math.min(1425, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 15) * 15));
+  function encaixe(horaSug) {
+    const n = new Date(), hr = horaSug || A.toHM(Math.min(1425, Math.ceil((n.getHours() * 60 + n.getMinutes()) / 15) * 15));
     const profs = ctx.profs.filter(p => p.ativo);
     const b = U.modal(`<h2>Encaixe</h2><form id="fEnc" class="form-grid">
       <label class="full">Nome do cliente<input name="nome" required maxlength="60"></label>
@@ -264,8 +372,342 @@
   }
 
   async function rel() {
+    if (!dono()) return relAtend();
+    box().innerHTML = `<div class="seg ag-modo" id="rSub" role="tablist"><button class="chip ${subRel === "fin" ? "on" : ""}" data-r="fin" role="tab">Financeiro</button><button class="chip ${subRel === "at" ? "on" : ""}" data-r="at" role="tab">Atendimentos</button></div><div id="rCorpo"></div>`;
+    $("#rSub").onclick = e => { const b = e.target.closest("[data-r]"); if (b && b.dataset.r !== subRel) { subRel = b.dataset.r; rel(); } };
+    return subRel === "fin" ? financeiro() : relAtend();
+  }
+
+  // ---------- planos de fidelidade ----------
+  async function plan() {
+    box().innerHTML = `<p class="vazio">Carregando…</p>`;
+    let pacs, ass, usos;
+    try { [pacs, ass, usos] = await Promise.all([S.pacotes(ctx.bid), S.assinantes(ctx.bid), S.usosPlano(ctx.bid, A.addDays(U.hoje(), -62))]); }
+    catch (e) {
+      box().innerHTML = /pacotes|assinantes|assinatura_ciclos|schema cache|does not exist|PGRST20/i.test(e.message)
+        ? `<div class="aviso ruim"><b>Falta atualizar o banco.</b> Rode o arquivo <code>supabase/schema.sql</code> atualizado no SQL Editor do Supabase para liberar os planos.</div>` : `<p class="erro">${esc(e.message)}</p>`;
+      return;
+    }
+    if (aba !== "plan" || !box()) return;
+    const h = U.hoje(), dm = d => d ? d.slice(8) + "/" + d.slice(5, 7) : "";
+    const pacDe = a => pacs.find(p => p.id === a.pacote_id), validoAte = a => a.ciclos.length ? a.ciclos.map(c => c.fim).sort().pop() : null;
+    const cicloAt = a => a.ciclos.find(c => c.ini <= h && c.fim > h);
+    const usados = (a, c) => usos.filter(u => u.assinante_id === a.id && u.data >= c.ini && u.data < c.fim && ["agendado", "concluido", "faltou"].includes(u.status)).length;
+    const pend = ass.filter(a => a.status === "pendente"), ativos = ass.filter(a => a.status === "ativa" && validoAte(a) > h);
+    const vencidos = ass.filter(a => a.status === "ativa" && !(validoAte(a) > h)), canc = ass.filter(a => a.status === "cancelada");
+    const mrr = ativos.reduce((s, a) => s + ((pacDe(a) || {}).preco || 0), 0);
+    const zapA = (a, t) => a.telefone ? `<a class="btn btn-mini btn-sec" target="_blank" rel="noopener" href="${esc(wa(a.telefone, t))}">WhatsApp</a>` : "";
+    const linhaAss = a => {
+      const pc = pacDe(a) || { nome: "Plano removido", cortes: 0 }, c = cicloAt(a), va = validoAte(a), u = c ? usados(a, c) : 0;
+      return `<div class="fin-item ass-item" data-ass="${esc(a.id)}"><div><b>${esc(a.nome)}</b><small>${esc(pc.nome)}${a.telefone ? " · " + esc(a.telefone) : ""} · código ${esc(a.codigo)}</small>
+          ${a.status === "ativa" && c ? `<div class="mp-barra"><i style="width:${pc.cortes ? Math.min(100, u / pc.cortes * 100) : 0}%"></i></div><small>${u} de ${pc.cortes} usados neste período</small>` : ""}</div>
+        <div class="fin-dir">${a.status === "pendente" ? `<span class="tag faltou">Aguardando pagamento</span>` : a.status === "cancelada" ? `<span class="tag cancelado">Cancelado</span>`
+          : va > h ? `<span class="tag concluido">Até ${dm(va)}</span>` : `<span class="tag cancelado">Venceu ${dm(va)}</span>`}</div>
+        <div class="fin-ac">${a.status === "pendente" ? `<button class="btn btn-mini btn-ok" data-renovar="${esc(a.id)}">Recebi o pagamento</button><button class="btn btn-mini btn-sec" data-recusar="${esc(a.id)}">Recusar</button>`
+          : a.status === "cancelada" ? `<button class="btn btn-mini btn-sec" data-renovar="${esc(a.id)}">Reativar</button><button class="btn btn-mini btn-sec perigo-txt" data-excluir="${esc(a.id)}">Excluir</button>`
+          : `<button class="btn btn-mini ${va > h ? "btn-sec" : "btn-ok"}" data-renovar="${esc(a.id)}">${va > h ? "Renovar +1 mês" : "Renovar"}</button><button class="btn btn-mini btn-sec" data-mais-ass="${esc(a.id)}">Mais</button>`}
+          ${zapA(a, a.status === "pendente" ? `Olá ${a.nome}! Recebemos seu pedido do plano ${pc.nome} (${money(pc.preco || 0)}/mês).` : `Olá ${a.nome}! Seu plano ${pc.nome} na ${ctx.b.nome}`)}</div></div>`;
+    };
+    box().innerHTML = `<div class="kpis"><div class="kpi"><small>Assinantes ativos</small><b>${ativos.length}</b></div><div class="kpi"><small>Receita mensal dos planos</small><b>${money(mrr)}</b></div>
+        <div class="kpi"><small>Pedidos novos</small><b>${pend.length}</b></div></div>
+      <div class="fin-sec" style="margin-top:6px"><div class="fin-cab"><h2>Seus planos</h2><button class="btn btn-mini" id="pNovo">+ Plano</button></div>
+        ${pacs.length ? pacs.map(p => `<div class="fin-item"><div><b>${esc(p.nome)}</b><small>${p.cortes} ${p.cortes === 1 ? "atendimento" : "atendimentos"} por mês · ${p.servicos.length ? esc(p.servicos.map(id => (cfg().servicos.find(s => s.id === id) || {}).nome).filter(Boolean).join(", ")) : "qualquer serviço"}</small></div>
+          <div class="fin-dir"><b>${money(p.preco)}<small style="display:inline"> /mês</small></b>${p.ativo ? "" : `<span class="tag">Oculto</span>`}</div><div class="fin-ac"><button class="btn btn-mini btn-sec" data-pac="${esc(p.id)}">Editar</button></div></div>`).join("")
+          : `<p class="vazio">Crie um plano, por exemplo “Clube do Corte”: R$ 150 por mês com 4 cortes. Ele aparece na página da barbearia e o cliente pede para assinar.</p>`}</div>
+      ${pend.length ? `<div class="fin-sec"><h2>Pedidos para confirmar</h2><p class="sub">Combine o pagamento com o cliente. Quando receber, toque em “Recebi o pagamento” para ativar.</p>${pend.map(linhaAss).join("")}</div>` : ""}
+      <div class="fin-sec"><div class="fin-cab"><h2>Assinantes</h2>${pacs.length ? `<button class="btn btn-mini btn-sec" id="aNovo">+ Assinante</button>` : ""}</div>
+        ${ativos.length || vencidos.length ? ativos.concat(vencidos).map(linhaAss).join("") : `<p class="vazio">Nenhum assinante ativo ainda.</p>`}
+        ${canc.length ? `<details class="ag-canc"><summary>${canc.length} ${canc.length === 1 ? "cancelado" : "cancelados"}</summary>${canc.map(linhaAss).join("")}</details>` : ""}</div>
+      <p class="sub fin-nota">O cliente usa o plano agendando pela página (o app reconhece pelo código). Cada horário marcado pelo plano entra na agenda com a etiqueta “Plano” e não cobra de novo. Cancelamento devolve o crédito; falta consome.</p>`;
+    box().onclick = async e => {
+      const t = e.target;
+      if (t.closest("#pNovo")) return editarPacote(null);
+      const ep = t.closest("[data-pac]"); if (ep) return editarPacote(pacs.find(p => p.id === ep.dataset.pac));
+      if (t.closest("#aNovo")) return novoAssinante(pacs);
+      const rn = t.closest("[data-renovar]"); if (rn) { const a = ass.find(x => x.id === rn.dataset.renovar); return renovar(a, pacDe(a), validoAte(a)); }
+      const rc = t.closest("[data-recusar]");
+      if (rc) { if (!confirm("Recusar este pedido?")) return; try { await S.atualizarAssinante(ctx.bid, rc.dataset.recusar, { status: "cancelada" }); U.toast("Pedido recusado."); plan(); } catch (er) { U.toast(er.message); } return; }
+      const ex = t.closest("[data-excluir]");
+      if (ex) { if (!confirm("Excluir este assinante de vez? Os horários dele continuam na agenda.")) return; try { await S.removerAssinante(ctx.bid, ex.dataset.excluir); U.toast("Excluído."); plan(); } catch (er) { U.toast(er.message); } return; }
+      const mm = t.closest("[data-mais-ass]"); if (mm) return maisAssinante(ass.find(x => x.id === mm.dataset.maisAss), pacs);
+    };
+  }
+
+  function editarPacote(p) {
+    const novo = !p; p = p || { nome: "", descricao: "", preco: "", cortes: 4, servicos: [], ativo: true };
+    const b = U.modal(`<h2>${novo ? "Novo plano" : "Editar plano"}</h2><form id="fPac" class="form-grid">
+      <label class="full">Nome do plano<input name="nome" required maxlength="60" value="${esc(p.nome)}" placeholder="Ex.: Clube do Corte"></label>
+      <label>Preço por mês (R$)<input name="preco" type="number" inputmode="decimal" min="0" step="0.01" required value="${esc(p.preco)}"></label>
+      <label>Atendimentos por mês<input name="cortes" type="number" inputmode="numeric" min="1" max="31" required value="${esc(p.cortes)}"></label>
+      <fieldset class="full pac-servs"><legend>Vale para quais serviços?</legend><p class="sub" style="margin:0 0 6px">Deixe tudo desmarcado para valer em qualquer serviço.</p>
+        ${cfg().servicos.map(s => `<label class="switch"><input type="checkbox" name="serv" value="${esc(s.id)}" ${p.servicos.includes(s.id) ? "checked" : ""}> ${esc(s.nome)} <small style="color:var(--mut);font-weight:400">${money(s.preco)}</small></label>`).join("")}</fieldset>
+      <label class="full">Descrição (opcional)<input name="descricao" maxlength="160" value="${esc(p.descricao)}" placeholder="Ex.: Corte toda semana, agendando pelo app"></label>
+      ${novo ? "" : `<label class="switch full"><input type="checkbox" name="ativo" ${p.ativo ? "checked" : ""}> Mostrar na página da barbearia</label>`}
+      <p class="erro full" id="pcErro"></p><button class="btn full">Salvar</button>
+      ${novo ? "" : `<button type="button" class="btn btn-sec full perigo-txt" id="pcDel">Excluir plano</button>`}<button type="button" class="btn btn-sec full" data-fechar>Cancelar</button></form>`);
+    const f = b.querySelector("#fPac");
+    f.onsubmit = async e => {
+      e.preventDefault(); const preco = Number(f.preco.value), cortes = Math.round(Number(f.cortes.value));
+      if (!(preco >= 0) || !(cortes >= 1 && cortes <= 31)) { b.querySelector("#pcErro").textContent = "Confira o preço e a quantidade."; return; }
+      try { await S.salvarPacote(ctx.bid, { id: p.id, nome: f.nome.value.trim(), descricao: f.descricao.value.trim(), preco, cortes, servicos: [...f.querySelectorAll("[name=serv]:checked")].map(i => i.value), ativo: novo ? true : f.ativo.checked });
+        U.fecharModal(); U.toast("Plano salvo."); plan(); }
+      catch (er) { b.querySelector("#pcErro").textContent = er.message; }
+    };
+    const del = b.querySelector("#pcDel");
+    if (del) del.onclick = async () => { if (!confirm(`Excluir o plano “${p.nome}”? Para só esconder da página, desmarque “Mostrar na página”.`)) return;
+      try { await S.removerPacote(ctx.bid, p.id); U.fecharModal(); U.toast("Plano excluído."); plan(); } catch (er) { b.querySelector("#pcErro").textContent = er.message; } };
+  }
+
+  function renovar(a, pc, va) {
+    if (!pc) return U.toast("Esse plano foi excluído. Escolha outro em “Mais”.");
+    const h = U.hoje(), ini = va && va > h ? va : h, dm = d => d.slice(8) + "/" + d.slice(5, 7) + "/" + d.slice(0, 4);
+    const fimD = A.parseYMD(ini); fimD.setMonth(fimD.getMonth() + 1);
+    const b = U.modal(`<h2>${a.status === "pendente" ? "Ativar plano" : "Renovar plano"}</h2><p class="sub" style="margin-top:-6px">${esc(a.nome)} · ${esc(pc.nome)}</p><form id="fRen" class="form-grid">
+      <label class="full">Valor recebido (R$)<input name="valor" type="number" inputmode="decimal" min="0" step="0.01" required value="${esc(pc.preco)}"></label>
+      <p class="full" style="margin:0">Período: <b>${dm(ini)}</b> até <b>${dm(A.ymd(fimD))}</b> · ${pc.cortes} ${pc.cortes === 1 ? "atendimento" : "atendimentos"}</p>
+      <label class="switch full"><input type="checkbox" name="lancar" checked> Lançar como entrada no Financeiro</label>
+      <p class="erro full" id="rnErro"></p><button class="btn btn-ok full">Confirmar</button><button type="button" class="btn btn-sec full" data-fechar>Cancelar</button></form>`);
+    const f = b.querySelector("#fRen");
+    f.onsubmit = async e => {
+      e.preventDefault();
+      try { await S.renovarAssinante(a.id, Number(f.valor.value) || 0, f.lancar.checked); U.fecharModal(); U.toast(a.status === "pendente" ? "Plano ativado!" : "Plano renovado."); plan(); }
+      catch (er) { b.querySelector("#rnErro").textContent = er.message; }
+    };
+  }
+
+  function novoAssinante(pacs) {
+    const at = pacs.filter(p => p.ativo).length ? pacs.filter(p => p.ativo) : pacs;
+    const b = U.modal(`<h2>Novo assinante</h2><form id="fNA" class="form-grid">
+      <label class="full">Nome do cliente<input name="nome" required maxlength="60"></label>
+      <label class="full">WhatsApp<input name="tel" type="tel" inputmode="tel" maxlength="20" placeholder="(00) 00000-0000"></label>
+      <label class="full">Plano<select name="pac">${at.map(p => `<option value="${esc(p.id)}">${esc(p.nome)} · ${money(p.preco)}/mês</option>`).join("")}</select></label>
+      <label class="switch full"><input type="checkbox" name="pago" checked> Já pagou o primeiro mês (ativar agora)</label>
+      <p class="erro full" id="naErro"></p><button class="btn full">Salvar</button><button type="button" class="btn btn-sec full" data-fechar>Cancelar</button></form>`);
+    const f = b.querySelector("#fNA");
+    f.onsubmit = async e => {
+      e.preventDefault(); if (f.nome.value.trim().length < 2) { b.querySelector("#naErro").textContent = "Digite o nome."; return; }
+      try {
+        const id = crypto.randomUUID(), pc = pacs.find(p => p.id === f.pac.value);
+        const cod = await S.criarAssinante(ctx.bid, { id, nome: f.nome.value.trim(), telefone: f.tel.value, pacote_id: pc.id });
+        if (f.pago.checked) await S.renovarAssinante(id, pc.preco, true);
+        U.modal(`<h2>Assinante salvo</h2><p>Mande o código para ${esc(f.nome.value.trim())}. Ele digita na página da barbearia em “Já assino e tenho um código” e passa a agendar pelo plano.</p><p class="codigo-grande">${esc(cod)}</p>
+          <div class="pilha">${f.tel.value.trim() ? `<a class="btn btn-ok" target="_blank" rel="noopener" href="${esc(wa(f.tel.value, `Olá! Seu plano ${pc.nome} na ${ctx.b.nome} está ${f.pago.checked ? "ativo" : "cadastrado"}. Para agendar pelo plano, abra ${location.origin}${U.url("/" + ctx.b.slug)} e use o código ${cod}.`))}">Enviar pelo WhatsApp</a>` : ""}<button class="btn btn-sec" data-fechar>Fechar</button></div>`);
+        plan();
+      } catch (er) { b.querySelector("#naErro").textContent = er.message; }
+    };
+  }
+
+  function maisAssinante(a, pacs) {
+    const ult = a.ciclos.slice().sort((x, y) => y.ini.localeCompare(x.ini))[0];
+    const b = U.modal(`<div id="mAss"><h2>${esc(a.nome)}</h2><p class="sub" style="margin-top:-6px">Código do plano: <b>${esc(a.codigo)}</b></p>
+      <div class="menu"><button data-op="trocar">Trocar de plano</button>${ult ? `<button data-op="desfazer">Desfazer a última renovação (${esc(ult.ini.slice(8))}/${esc(ult.ini.slice(5, 7))} a ${esc(ult.fim.slice(8))}/${esc(ult.fim.slice(5, 7))})</button>` : ""}
+        <button data-op="cancelar" class="perigo">Cancelar plano</button><button data-fechar>Fechar</button></div></div>`);
+    b.querySelector("#mAss").onclick = async e => {
+      const op = (e.target.closest("[data-op]") || {}).dataset; if (!op || !op.op) return;
+      try {
+        if (op.op === "cancelar") { if (!confirm(`Cancelar o plano de ${a.nome}? Ele deixa de agendar pelo plano.`)) return; await S.atualizarAssinante(ctx.bid, a.id, { status: "cancelada" }); U.toast("Plano cancelado."); }
+        if (op.op === "desfazer") { if (!confirm("Desfazer a última renovação? Se lançou no Financeiro, apague a entrada por lá.")) return; await S.desfazerCiclo(ctx.bid, ult.id); U.toast("Renovação desfeita."); }
+        if (op.op === "trocar") {
+          const m = U.modal(`<h2>Trocar plano de ${esc(a.nome)}</h2><div class="menu">${pacs.map(p => `<button data-p="${esc(p.id)}" ${p.id === a.pacote_id ? "disabled" : ""}>${esc(p.nome)} · ${money(p.preco)}/mês · ${p.cortes} atend.</button>`).join("")}<button data-fechar>Cancelar</button></div>`);
+          m.querySelector(".menu").onclick = async ev => { const x = ev.target.closest("[data-p]"); if (!x) return; try { await S.atualizarAssinante(ctx.bid, a.id, { pacote_id: x.dataset.p }); U.fecharModal(); U.toast("Plano trocado."); plan(); } catch (er) { U.toast(er.message); } };
+          return;
+        }
+        U.fecharModal(); plan();
+      } catch (er) { U.toast(er.message); }
+    };
+  }
+
+  // ---------- financeiro ----------
+  const CAT_SAIDA = ["Aluguel", "Energia", "Água", "Internet e telefone", "Produtos e estoque", "Manutenção", "Marketing", "Impostos e taxas", "Salários e pró-labore", "Contador", "Equipamentos", "Outros"];
+  const CAT_ENTRADA = ["Aluguel de cadeira", "Serviço fora da agenda", "Planos de fidelidade", "Outros"];
+  const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+  const somaMes = (ym, n) => { const [y, m] = ym.split("-").map(Number), d = new Date(y, m - 1 + n, 1); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0"); };
+  const fimMes = ym => { const [y, m] = ym.split("-").map(Number); return ym + "-" + String(new Date(y, m, 0).getDate()).padStart(2, "0"); };
+  const nomeMes = ym => MESES[+ym.slice(5) - 1];
+  const diaNoMes = (ym, d) => ym + "-" + String(Math.min(d, +fimMes(ym).slice(8))).padStart(2, "0");
+  const pct = (a, b) => b ? Math.round((a - b) / Math.abs(b) * 100) : null;
+
+  function calcMes(ym, ags, vendas, lanc, pagos, contas) {
+    const conc = ags.filter(a => a.status === "concluido");
+    const soma = (l, f) => l.reduce((s, x) => s + f(x), 0);
+    const serv = soma(conc, a => a.preco), prod = soma(vendas, v => v.preco * v.qtd);
+    const avulsos = lanc.filter(l => !l.competencia), PL = "Planos de fidelidade";
+    const planos = soma(avulsos.filter(l => l.tipo === "entrada" && l.categoria === PL), l => l.valor), outrasE = soma(avulsos.filter(l => l.tipo === "entrada" && l.categoria !== PL), l => l.valor);
+    const variaveis = soma(avulsos.filter(l => l.tipo === "saida"), l => l.valor);
+    const comissoes = soma(conc, a => { const p = ctx.profs.find(x => x.id === a.prof_id); return (a.preco || a.valor_ref || 0) * Number((p && p.comissao) || 0) / 100; });
+    const fixas = contas.map(c => { const pg = pagos.find(l => l.conta_fixa_id === c.id); return { c, pg, valor: pg ? pg.valor : c.ativo ? c.valor : 0 }; }).filter(x => x.pg || x.c.ativo);
+    const totFixas = soma(fixas, x => x.valor);
+    const entradas = serv + prod + planos + outrasE, saidas = totFixas + comissoes + variaveis;
+    const aReceber = soma(ags.filter(a => a.status === "agendado" && a.data >= U.hoje()), a => a.preco);
+    return { conc, serv, prod, planos, outrasE, variaveis, comissoes, fixas, totFixas, entradas, saidas, resultado: entradas - saidas, avulsos, aReceber };
+  }
+
+  async function financeiro() {
+    const alvo = $("#rCorpo"), ym = mesFin, ymAnt = somaMes(ym, -1), atual = U.hoje().slice(0, 7);
+    alvo.innerHTML = `<div class="dia-topo"><button class="btn btn-sec dia-seta" id="mAnt" aria-label="Mês anterior">‹</button>
+      <div class="dia-tit"><b>${cap(nomeMes(ym))}</b><small>${ym.slice(0, 4)} · ${ym === atual ? "mês atual" : ym < atual ? "mês fechado" : "mês futuro"}</small></div>
+      <button class="btn btn-sec dia-seta" id="mProx" aria-label="Próximo mês">›</button></div><div id="fOut"><p class="vazio">Carregando…</p></div>`;
+    $("#mAnt").onclick = () => { mesFin = somaMes(ym, -1); financeiro(); };
+    $("#mProx").onclick = () => { mesFin = somaMes(ym, 1); financeiro(); };
+    let d;
+    try {
+      const [contas, ags, vendas, lanc, pagos, agsA, vendasA, lancA, pagosA] = await Promise.all([S.contasFixas(ctx.bid),
+        S.listar(ctx.bid, ym + "-01", fimMes(ym)), S.vendas(ctx.bid, ym + "-01", fimMes(ym)).catch(() => []), S.lancamentos(ctx.bid, ym + "-01", fimMes(ym)), S.pagosDoMes(ctx.bid, ym),
+        S.listar(ctx.bid, ymAnt + "-01", fimMes(ymAnt)), S.vendas(ctx.bid, ymAnt + "-01", fimMes(ymAnt)).catch(() => []), S.lancamentos(ctx.bid, ymAnt + "-01", fimMes(ymAnt)), S.pagosDoMes(ctx.bid, ymAnt)]);
+      d = { contas, m: calcMes(ym, ags, vendas, lanc, pagos, contas), ant: calcMes(ymAnt, agsA, vendasA, lancA, pagosA, contas), ags, vendas };
+    } catch (e) {
+      const falta = /contas_fixas|lancamentos|schema cache|does not exist|PGRST20/i.test(e.message);
+      $("#fOut").innerHTML = falta ? `<div class="aviso ruim"><b>Falta atualizar o banco.</b> Rode o arquivo <code>supabase/schema.sql</code> atualizado no SQL Editor do Supabase para liberar o financeiro.</div>` : `<p class="erro">${esc(e.message)}</p>`;
+      return;
+    }
+    if (!$("#fOut")) return;
+    const { m, ant, contas } = d, hoje = U.hoje();
+    const dif = pct(m.resultado, ant.resultado), margem = m.entradas ? Math.round(m.resultado / m.entradas * 100) : 0;
+    const linha = (rot, v, extra) => `<div class="fin-l"><span>${rot}${extra ? ` <small>${extra}</small>` : ""}</span><b>${money(v)}</b></div>`;
+    const stFixa = x => {
+      if (x.pg) return `<span class="tag concluido">Paga ${x.pg.data ? "em " + esc(x.pg.data.slice(8) + "/" + x.pg.data.slice(5, 7)) : ""}</span>`;
+      const venc = diaNoMes(ym, x.c.dia), dias = Math.round((A.parseYMD(venc) - A.parseYMD(hoje)) / 864e5);
+      if (ym > hoje.slice(0, 7)) return `<span class="tag">Vence dia ${x.c.dia}</span>`;
+      if (ym < hoje.slice(0, 7)) return `<span class="tag cancelado">Não paga</span>`;
+      if (dias < 0) return `<span class="tag cancelado">Vencida há ${-dias} ${dias === -1 ? "dia" : "dias"}</span>`;
+      if (dias === 0) return `<span class="tag faltou">Vence hoje</span>`;
+      return `<span class="tag ${dias <= 3 ? "faltou" : ""}">Vence ${dias === 1 ? "amanhã" : `em ${dias} dias`}</span>`;
+    };
+    const pagas = m.fixas.filter(x => x.pg).length;
+    const cats = {};
+    m.fixas.forEach(x => { cats[x.c.categoria] = (cats[x.c.categoria] || 0) + x.valor; });
+    m.avulsos.filter(l => l.tipo === "saida").forEach(l => { cats[l.categoria] = (cats[l.categoria] || 0) + l.valor; });
+    if (m.comissoes) cats["Comissões dos barbeiros"] = m.comissoes;
+    const catLista = Object.entries(cats).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]), mxCat = Math.max(1, ...catLista.map(c => c[1]));
+
+    $("#fOut").innerHTML = `<div class="fin-res ${m.resultado < 0 ? "neg" : ""}">
+        <small>${m.resultado < 0 ? "Prejuízo" : "Lucro"} em ${nomeMes(ym)}</small><b>${money(m.resultado)}</b>
+        <span>${m.entradas ? `Margem de ${margem}%` : "Sem entradas no mês"}${dif != null && (ant.entradas || ant.saidas) ? ` · ${dif >= 0 ? "▲" : "▼"} ${Math.abs(dif)}% vs. ${nomeMes(ymAnt)}` : ""}</span>
+        ${m.aReceber ? `<em>+ ${money(m.aReceber)} ainda agendados para este mês</em>` : ""}</div>
+      <div class="fin-cols">
+        <div class="fin-box"><h3>Entradas <b class="pos">${money(m.entradas)}</b></h3>${linha("Serviços", m.serv, `${m.conc.length} atend.`)}${linha("Produtos", m.prod)}${m.planos ? linha("Planos de fidelidade", m.planos) : ""}${linha("Outras entradas", m.outrasE)}</div>
+        <div class="fin-box"><h3>Saídas <b class="neg">${money(m.saidas)}</b></h3>${linha("Contas fixas", m.totFixas)}${linha("Comissões", m.comissoes, "calculadas")}${linha("Despesas avulsas", m.variaveis)}</div>
+      </div>
+
+      <div class="fin-sec"><div class="fin-cab"><h2>Contas fixas</h2><button class="btn btn-mini" id="fNovaFixa">+ Conta fixa</button></div>
+        ${m.fixas.length ? `<p class="sub">${money(m.totFixas)} no mês · ${pagas} de ${m.fixas.length} ${pagas === 1 ? "paga" : "pagas"}</p>
+        ${m.fixas.sort((a, b) => a.c.dia - b.c.dia).map(x => `<div class="fin-item" data-fixa="${esc(x.c.id)}"><div><b>${esc(x.c.descricao)}</b><small>${esc(x.c.categoria)} · dia ${x.c.dia}</small></div>
+          <div class="fin-dir"><b>${money(x.valor)}</b>${stFixa(x)}</div>
+          <div class="fin-ac">${x.pg ? `<button class="btn btn-mini btn-sec" data-desfazer-fixa="${esc(x.pg.id)}">Desfazer</button>` : `<button class="btn btn-mini btn-ok" data-pagar="${esc(x.c.id)}">Pagar</button>`}<button class="btn btn-mini btn-sec" data-editar-fixa="${esc(x.c.id)}">Editar</button></div></div>`).join("")}`
+        : `<p class="vazio">Cadastre as contas que se repetem todo mês: aluguel, energia, água, internet, contador… Elas entram sozinhas em todos os meses.</p>`}
+        ${contas.some(c => !c.ativo) ? `<p class="sub">${contas.filter(c => !c.ativo).length} conta(s) desativada(s): ${contas.filter(c => !c.ativo).map(c => `<button class="lnk" data-editar-fixa="${esc(c.id)}">${esc(c.descricao)}</button>`).join(", ")}</p>` : ""}</div>
+
+      <div class="fin-sec"><div class="fin-cab"><h2>Despesas e entradas avulsas</h2><div class="seg"><button class="btn btn-mini" data-novo="saida">+ Despesa</button><button class="btn btn-mini btn-sec" data-novo="entrada">+ Entrada</button></div></div>
+        ${m.avulsos.length ? m.avulsos.sort((a, b) => b.data.localeCompare(a.data)).map(l => `<div class="fin-item" data-lanc="${esc(l.id)}" role="button" tabindex="0"><div><b>${esc(l.descricao)}</b><small>${esc(l.data.slice(8) + "/" + l.data.slice(5, 7))} · ${esc(l.categoria)}</small></div>
+          <div class="fin-dir"><b class="${l.tipo === "entrada" ? "pos" : "neg"}">${l.tipo === "entrada" ? "+" : "−"} ${money(l.valor)}</b>${l.pago ? "" : `<span class="tag faltou">${l.tipo === "entrada" ? "a receber" : "a pagar"}</span>`}</div>
+          <div class="fin-ac">${l.pago ? "" : `<button class="btn btn-mini btn-ok" data-quitar="${esc(l.id)}">${l.tipo === "entrada" ? "Recebido" : "Pago"}</button>`}</div></div>`).join("")
+          : `<p class="vazio">Nada lançado em ${nomeMes(ym)}. Use “+ Despesa” para gastos do dia a dia (lâminas, produtos, conserto) e “+ Entrada” para dinheiro que não veio da agenda.</p>`}</div>
+
+      ${catLista.length ? `<div class="fin-sec"><h2>Para onde foi o dinheiro</h2>${catLista.map(([n, v]) => `<div class="barra"><span>${esc(n)}</span><span>${money(v)}</span><div class="trilho"><i style="width:${(v / mxCat * 100).toFixed(1)}%"></i></div></div>`).join("")}</div>` : ""}
+      <button class="btn btn-sec btn-bloco" id="fCsv">Baixar planilha do mês (CSV)</button>
+      <p class="sub fin-nota">Serviços e produtos vêm da agenda (atendimentos concluídos e vendas). Comissões usam a % de cada barbeiro em Equipe.</p>`;
+
+    $("#fOut").onclick = async e => {
+      const t = e.target;
+      if (t.closest("#fNovaFixa")) return editarFixa(null);
+      const ef = t.closest("[data-editar-fixa]"); if (ef) return editarFixa(contas.find(c => c.id === ef.dataset.editarFixa));
+      const pg = t.closest("[data-pagar]"); if (pg) return pagarFixa(contas.find(c => c.id === pg.dataset.pagar), ym);
+      const df = t.closest("[data-desfazer-fixa]");
+      if (df) { try { await S.removerLancamento(ctx.bid, df.dataset.desfazerFixa); U.toast("Pagamento desfeito."); financeiro(); } catch (er) { U.toast(er.message); } return; }
+      const nv = t.closest("[data-novo]"); if (nv) return editarLanc({ tipo: nv.dataset.novo }, ym);
+      const qt = t.closest("[data-quitar]");
+      if (qt) { const l = m.avulsos.find(x => x.id === qt.dataset.quitar); try { await S.salvarLancamento(ctx.bid, Object.assign({}, l, { pago: true })); U.toast("Atualizado."); financeiro(); } catch (er) { U.toast(er.message); } return; }
+      if (t.closest("#fCsv")) return baixarCsv(ym, d);
+      const it = t.closest("[data-lanc]"); if (it) editarLanc(m.avulsos.find(x => x.id === it.dataset.lanc), ym);
+    };
+    $("#fOut").onkeydown = e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches("[data-lanc]")) { e.preventDefault(); $("#fOut").onclick(e); } };
+  }
+
+  const opcoes = (lista, sel) => lista.concat(sel && !lista.includes(sel) ? [sel] : []).map(c => `<option ${c === sel ? "selected" : ""}>${esc(c)}</option>`).join("");
+
+  function editarFixa(c) {
+    const novo = !c; c = c || { descricao: "", categoria: "Aluguel", valor: "", dia: 10, ativo: true };
+    const b = U.modal(`<h2>${novo ? "Nova conta fixa" : "Editar conta fixa"}</h2><form id="fFixa" class="form-grid">
+      <label class="full">Nome da conta<input name="descricao" required maxlength="60" value="${esc(c.descricao)}" placeholder="Ex.: Aluguel do salão, Energia"></label>
+      <label>Valor por mês (R$)<input name="valor" type="number" inputmode="decimal" min="0" step="0.01" required value="${esc(c.valor)}"></label>
+      <label>Vence todo dia<input name="dia" type="number" inputmode="numeric" min="1" max="31" required value="${esc(c.dia)}"></label>
+      <label class="full">Categoria<select name="categoria">${opcoes(CAT_SAIDA, c.categoria)}</select></label>
+      ${novo ? "" : `<label class="switch full"><input type="checkbox" name="ativo" ${c.ativo ? "checked" : ""}> Conta ativa (desmarque se parou de pagar)</label>`}
+      <p class="sub full" style="margin:0">Se o valor mudar de um mês para outro (como a energia), ajuste na hora de pagar.</p>
+      <p class="erro full" id="fxErro"></p><button class="btn full">Salvar</button>
+      ${novo ? "" : `<button type="button" class="btn btn-sec full perigo-txt" id="fxDel">Excluir conta</button>`}<button type="button" class="btn btn-sec full" data-fechar>Cancelar</button></form>`);
+    const f = b.querySelector("#fFixa");
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const valor = Number(f.valor.value), dia = Math.round(Number(f.dia.value));
+      if (!(valor >= 0) || !(dia >= 1 && dia <= 31)) { b.querySelector("#fxErro").textContent = "Confira o valor e o dia."; return; }
+      try { await S.salvarContaFixa(ctx.bid, { id: c.id, descricao: f.descricao.value.trim(), categoria: f.categoria.value, valor, dia, ativo: novo ? true : f.ativo.checked }); U.fecharModal(); U.toast("Conta salva."); financeiro(); }
+      catch (er) { b.querySelector("#fxErro").textContent = er.message; }
+    };
+    const del = b.querySelector("#fxDel");
+    if (del) del.onclick = async () => {
+      if (!confirm(`Excluir “${c.descricao}”? Os pagamentos já feitos continuam no histórico.`)) return;
+      try { await S.removerContaFixa(ctx.bid, c.id); U.fecharModal(); U.toast("Conta excluída."); financeiro(); } catch (er) { b.querySelector("#fxErro").textContent = er.message; }
+    };
+  }
+
+  function pagarFixa(c, ym) {
+    const hoje = U.hoje(), sug = hoje.slice(0, 7) === ym ? hoje : diaNoMes(ym, c.dia);
+    const b = U.modal(`<h2>Pagar ${esc(c.descricao)}</h2><p class="sub" style="margin-top:-6px">Referente a ${nomeMes(ym)} de ${ym.slice(0, 4)}</p><form id="fPag" class="form-grid">
+      <label>Valor pago (R$)<input name="valor" type="number" inputmode="decimal" min="0.01" step="0.01" required value="${esc(c.valor)}"></label>
+      <label>Data do pagamento<input name="data" type="date" required value="${sug}"></label>
+      <p class="erro full" id="pgErro"></p><button class="btn btn-ok full">Confirmar pagamento</button><button type="button" class="btn btn-sec full" data-fechar>Cancelar</button></form>`);
+    const f = b.querySelector("#fPag");
+    f.onsubmit = async e => {
+      e.preventDefault(); const valor = Number(f.valor.value);
+      if (!(valor > 0)) { b.querySelector("#pgErro").textContent = "Digite o valor pago."; return; }
+      try { await S.salvarLancamento(ctx.bid, { tipo: "saida", descricao: c.descricao, categoria: c.categoria, valor, data: f.data.value, pago: true, conta_fixa_id: c.id, competencia: ym });
+        U.fecharModal(); U.toast("Pagamento registrado."); financeiro(); }
+      catch (er) { b.querySelector("#pgErro").textContent = er.message; }
+    };
+  }
+
+  function editarLanc(l, ym) {
+    const novo = !l.id, ent = l.tipo === "entrada", hoje = U.hoje();
+    l = Object.assign({ descricao: "", categoria: ent ? CAT_ENTRADA[0] : "Produtos e estoque", valor: "", data: hoje.slice(0, 7) === ym ? hoje : ym + "-01", pago: true }, l);
+    const b = U.modal(`<h2>${novo ? (ent ? "Nova entrada" : "Nova despesa") : (ent ? "Editar entrada" : "Editar despesa")}</h2><form id="fLanc" class="form-grid">
+      <label class="full">Descrição<input name="descricao" required maxlength="80" value="${esc(l.descricao)}" placeholder="${ent ? "Ex.: Aluguel de cadeira do Pedro" : "Ex.: Lâminas, conserto da máquina"}"></label>
+      <label>Valor (R$)<input name="valor" type="number" inputmode="decimal" min="0.01" step="0.01" required value="${esc(l.valor)}"></label>
+      <label>Data<input name="data" type="date" required value="${esc(l.data)}"></label>
+      <label class="full">Categoria<select name="categoria">${opcoes(ent ? CAT_ENTRADA : CAT_SAIDA, l.categoria)}</select></label>
+      <label class="switch full"><input type="checkbox" name="pago" ${l.pago ? "checked" : ""}> ${ent ? "Já recebi" : "Já paguei"}</label>
+      <p class="erro full" id="lErro"></p><button class="btn full">Salvar</button>
+      ${novo ? "" : `<button type="button" class="btn btn-sec full perigo-txt" id="lDel">Excluir</button>`}<button type="button" class="btn btn-sec full" data-fechar>Cancelar</button></form>`);
+    const f = b.querySelector("#fLanc");
+    f.onsubmit = async e => {
+      e.preventDefault(); const valor = Number(f.valor.value);
+      if (!(valor > 0)) { b.querySelector("#lErro").textContent = "Digite o valor."; return; }
+      try { await S.salvarLancamento(ctx.bid, { id: l.id, tipo: l.tipo, descricao: f.descricao.value.trim(), categoria: f.categoria.value, valor, data: f.data.value, pago: f.pago.checked });
+        U.fecharModal(); U.toast("Salvo."); if (f.data.value.slice(0, 7) !== mesFin) mesFin = f.data.value.slice(0, 7); financeiro(); }
+      catch (er) { b.querySelector("#lErro").textContent = er.message; }
+    };
+    const del = b.querySelector("#lDel");
+    if (del) del.onclick = async () => { if (!confirm("Excluir este lançamento?")) return;
+      try { await S.removerLancamento(ctx.bid, l.id); U.fecharModal(); U.toast("Excluído."); financeiro(); } catch (er) { b.querySelector("#lErro").textContent = er.message; } };
+  }
+
+  function baixarCsv(ym, d) {
+    const m = d.m, br = n => n.toFixed(2).replace(".", ","), cel = s => `"${String(s).replace(/"/g, '""')}"`;
+    const linhas = [["Data", "Tipo", "Categoria", "Descrição", "Valor", "Situação"]];
+    m.conc.forEach(a => linhas.push([a.data, "Entrada", "Serviços", `${a.servico_nome} - ${a.nome} (${nomeProf(a.prof_id)})`, br(a.preco), "Recebido"]));
+    d.vendas.forEach(v => linhas.push([v.data, "Entrada", "Produtos", `${v.produto_nome}${v.qtd > 1 ? " x" + v.qtd : ""}`, br(v.preco * v.qtd), "Recebido"]));
+    m.avulsos.forEach(l => linhas.push([l.data, l.tipo === "entrada" ? "Entrada" : "Saída", l.categoria, l.descricao, br(l.tipo === "entrada" ? l.valor : -l.valor), l.pago ? (l.tipo === "entrada" ? "Recebido" : "Pago") : (l.tipo === "entrada" ? "A receber" : "A pagar")]));
+    m.fixas.forEach(x => linhas.push([x.pg ? x.pg.data : diaNoMes(ym, x.c.dia), "Saída", x.c.categoria, x.c.descricao + " (conta fixa)", br(-x.valor), x.pg ? "Pago" : "A pagar"]));
+    if (m.comissoes) linhas.push([fimMes(ym), "Saída", "Comissões dos barbeiros", "Comissões calculadas sobre os serviços", br(-m.comissoes), "Calculado"]);
+    linhas.push([], ["", "", "", "Entradas", br(m.entradas)], ["", "", "", "Saídas", br(-m.saidas)], ["", "", "", "Resultado", br(m.resultado)]);
+    const csv = "﻿" + linhas.map(l => l.map(cel).join(";")).join("\r\n");
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    a.download = `financeiro-${ctx.b.slug}-${ym}.csv`; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  }
+
+  async function relAtend() {
     const PER = { "0": "Hoje", "7": "7 dias", "mes": "Este mês", "30": "30 dias", "90": "90 dias" };
-    box().innerHTML = `<div class="seg" id="rPer">${Object.entries(PER).map(([k, t]) => `<button class="btn btn-mini ${periodo === k ? "" : "btn-sec"}" data-p="${k}">${t}</button>`).join("")}</div><div id="rOut"><p class="vazio">Carregando…</p></div>`;
+    ($("#rCorpo") || box()).innerHTML = `<div class="seg" id="rPer">${Object.entries(PER).map(([k, t]) => `<button class="btn btn-mini ${periodo === k ? "" : "btn-sec"}" data-p="${k}">${t}</button>`).join("")}</div><div id="rOut"><p class="vazio">Carregando…</p></div>`;
     $("#rPer").onclick = e => { const b = e.target.closest("[data-p]"); if (b) { periodo = b.dataset.p; rel(); } };
     const fim = U.hoje(), ini = periodo === "mes" ? fim.slice(0, 8) + "01" : A.addDays(fim, -(+periodo || 0));
     let ags, vendas; try { [ags, vendas] = await Promise.all([S.listar(ctx.bid, ini, A.addDays(fim, 60), dono() ? undefined : ctx.prof_id), S.vendas(ctx.bid, ini, fim, dono() ? undefined : ctx.prof_id).catch(() => [])]); }
@@ -281,7 +723,7 @@
     const meu = ctx.profs.find(p => p.id === ctx.prof_id) || {}, com = Number(meu.comissao || 0);
     let html = `<div class="kpis">
       <div class="kpi"><small>${dono() ? "Faturamento" : "Você atendeu"}</small><b>${money(fat)}</b></div>
-      ${!dono() && com ? `<div class="kpi destaque"><small>Sua comissão (${com}%)</small><b>${money(fat * com / 100)}</b></div>` : ""}
+      ${!dono() && com ? `<div class="kpi destaque"><small>Sua comissão (${com}%)</small><b>${money(conc.reduce((s, a) => s + (a.preco || a.valor_ref || 0), 0) * com / 100)}</b></div>` : ""}
       <div class="kpi"><small>Atendimentos</small><b>${conc.length}</b></div><div class="kpi"><small>Ticket médio</small><b>${money(conc.length ? fat / conc.length : 0)}</b></div>
       <div class="kpi"><small>Faltas / cancel.</small><b>${faltas} / ${canc}</b></div><div class="kpi"><small>Agendado a receber</small><b>${money(prev)}</b></div>
       <div class="kpi"><small>Horário de pico</small><b>${pico ? pico[0] : "—"}</b></div>
@@ -296,7 +738,7 @@
         const pp = agrupa(conc, a => a.prof_id);
         html += `<h2>Por barbeiro</h2><div class="scroll"><table class="tab"><thead><tr><th>Barbeiro</th><th class="num">Atend.</th><th class="num">Faturou</th><th class="num">Produtos</th><th class="num">Comissão</th></tr></thead><tbody>${pp.map(([id, s]) => {
           const p = ctx.profs.find(x => x.id === id) || { nome: "—", comissao: 0 }, prodP = vendas.filter(v => v.prof_id === id).reduce((t, v) => t + v.preco * v.qtd, 0);
-          return `<tr><td>${esc(p.nome)}</td><td class="num">${s.n}</td><td class="num">${money(s.v)}</td><td class="num">${prodP ? money(prodP) : "—"}</td><td class="num">${p.comissao ? money(s.v * p.comissao / 100) + ` <small>(${Number(p.comissao)}%)</small>` : "—"}</td></tr>`; }).join("")}</tbody></table></div>`;
+          return `<tr><td>${esc(p.nome)}</td><td class="num">${s.n}</td><td class="num">${money(s.v)}</td><td class="num">${prodP ? money(prodP) : "—"}</td><td class="num">${p.comissao ? money(conc.filter(a => a.prof_id === id).reduce((t, a) => t + (a.preco || a.valor_ref || 0), 0) * p.comissao / 100) + ` <small>(${Number(p.comissao)}%)</small>` : "—"}</td></tr>`; }).join("")}</tbody></table></div>`;
       }
       html += `<h2>Receita por serviço</h2>${barras(agrupa(conc, a => a.servico_nome), "", s => money(s.v))}
         <h2 style="margin-top:24px">Movimento por dia da semana</h2>${barras(porDia, "var(--azul)", s => s.n)}`;

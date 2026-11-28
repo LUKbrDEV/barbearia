@@ -36,7 +36,9 @@
     : /indisponivel/i.test(m) ? "Agenda indisponível no momento." : /limite_plano/i.test(m) ? "Seu plano não permite mais barbeiros ativos. Troque de plano em Assinatura."
     : /sem estoque/i.test(m) ? "Sem estoque suficiente desse produto." : /atendimento invalido/i.test(m) ? "Esse atendimento não é seu."
     : /slug/i.test(m) ? "Esse endereço já está em uso." : /convite/i.test(m) ? "Convite inválido ou já usado."
-    : /JWT|token/i.test(m) ? "Sessão expirada. Entre novamente." : /Failed to fetch|NetworkError/i.test(m) ? "Sem conexão com a internet." : m;
+    : /plano nao cobre/i.test(m) ? "Seu plano não cobre esse serviço." : /plano esgotado/i.test(m) ? "Você já usou todos os cortes do seu plano neste período."
+    : /plano fora do periodo/i.test(m) ? "Essa data fica fora do período pago do seu plano." : /plano invalido/i.test(m) ? "Código do plano inválido ou plano ainda não ativado pela barbearia."
+    : /telefone invalido/i.test(m) ? "Digite um WhatsApp válido, com DDD." : /muitos pedidos/i.test(m) ? "Muitos pedidos agora. Tente daqui a pouco." : /lancamentos_conta_fixa_id_competencia/i.test(m) ? "Essa conta já foi paga neste mês." : /JWT|token/i.test(m) ? "Sessão expirada. Entre novamente." : /Failed to fetch|NetworkError/i.test(m) ? "Sem conexão com a internet." : m;
   async function sb(path, opt = {}) {
     const t = opt.auth ? await token() : null;
     if (opt.auth && !t) throw new Error("Sessão expirada. Entre novamente.");
@@ -49,7 +51,7 @@
   }
   const rpc = (fn, body, a) => sb("/rest/v1/rpc/" + fn, { method: "POST", body, auth: a });
   const t5 = v => v ? String(v).slice(0, 5) : "";
-  const normAg = a => Object.assign({}, a, { hora: t5(a.hora), preco: Number(a.preco) });
+  const normAg = a => Object.assign({}, a, { hora: t5(a.hora), preco: Number(a.preco), valor_ref: a.valor_ref != null ? Number(a.valor_ref) : null });
   const normBl = b => Object.assign({}, b, { ini: t5(b.ini), fim: t5(b.fim) });
   const q = encodeURIComponent;
   const fotoURL = (bid, arq, v) => v ? `${URL_}/storage/v1/object/public/logos/${bid}/${arq}?v=${v}` : null;
@@ -61,10 +63,16 @@
     async publico(slug) {
       const r = await rpc("dados_publicos", { p_slug: slug }); if (!r) return null;
       r.b.config = Object.assign({}, window.DEFAULT_CONFIG, r.b.config || {}); r.profs = r.profs || [];
-      r.produtos = (r.produtos || []).map(p => Object.assign(p, { preco: Number(p.preco) })); return r;
+      r.produtos = (r.produtos || []).map(p => Object.assign(p, { preco: Number(p.preco) }));
+      r.pacotes = (r.pacotes || []).map(p => Object.assign(p, { preco: Number(p.preco), servicos: p.servicos || [] })); return r;
     },
     async ocupados(slug, de, ate) { return ((await rpc("horarios_ocupados", { p_slug: slug, p_de: de, p_ate: ate })) || []).map(x => ({ prof: x.prof, data: x.data, ini: t5(x.ini), fim: t5(x.fim) })); },
-    async agendar(slug, r) { return await rpc("agendar", { p_slug: slug, p_servico: r.servico_id, p_prof: r.prof_id || null, p_nome: r.nome, p_tel: r.telefone || "", p_data: r.data, p_hora: r.hora }); },
+    async agendar(slug, r) {
+      const p = { p_slug: slug, p_servico: r.servico_id, p_prof: r.prof_id || null, p_nome: r.nome, p_tel: r.telefone || "", p_data: r.data, p_hora: r.hora };
+      return r.codigo ? await rpc("agendar_plano", Object.assign(p, { p_codigo: r.codigo })) : await rpc("agendar", p);
+    },
+    async pedirAssinatura(slug, pacote, nome, tel) { return await rpc("pedir_assinatura", { p_slug: slug, p_pacote: pacote, p_nome: nome, p_tel: tel }); },
+    async meuPlano(slug, codigo) { const r = await rpc("meu_plano", { p_slug: slug, p_codigo: codigo }); if (r && r.pacote) r.pacote.preco = Number(r.pacote.preco); return r; },
     async statusCliente(ids) { return ids.length ? (await rpc("status_agendamentos", { p_ids: ids })) || [] : []; },
     async cancelar(id, token) { await rpc("cancelar_agendamento", { p_id: id, p_token: token }); },
     async slugLivre(slug) { return slugOk(slug) && !!(await rpc("slug_disponivel", { p_slug: slug })); },
@@ -135,6 +143,46 @@
       return ((await sb(`/rest/v1/vendas?barbearia_id=eq.${q(bid)}&data=gte.${de}&data=lte.${ate}${profId ? "&prof_id=eq." + q(profId) : ""}&order=data,criado_em`, { auth: true })) || [])
         .map(v => Object.assign(v, { preco: Number(v.preco) }));
     },
+    async pacotes(bid) { return ((await sb(`/rest/v1/pacotes?barbearia_id=eq.${q(bid)}&order=ordem,preco`, { auth: true })) || []).map(p => Object.assign(p, { preco: Number(p.preco), servicos: p.servicos || [] })); },
+    async salvarPacote(bid, p) {
+      const body = { nome: p.nome, descricao: p.descricao || "", preco: p.preco, cortes: p.cortes, servicos: p.servicos || [], ativo: p.ativo !== false, ordem: p.ordem || 0 };
+      if (p.id) await sb(`/rest/v1/pacotes?id=eq.${q(p.id)}`, { method: "PATCH", auth: true, body });
+      else await sb("/rest/v1/pacotes", { method: "POST", auth: true, body: Object.assign({ barbearia_id: bid }, body), headers: { Prefer: "return=minimal" } });
+    },
+    async removerPacote(bid, id) { await sb(`/rest/v1/pacotes?id=eq.${q(id)}`, { method: "DELETE", auth: true }); },
+    async assinantes(bid) {
+      const [l, c] = await Promise.all([sb(`/rest/v1/assinantes?barbearia_id=eq.${q(bid)}&order=criado_em.desc`, { auth: true }), sb(`/rest/v1/assinatura_ciclos?barbearia_id=eq.${q(bid)}&order=ini`, { auth: true })]);
+      return (l || []).map(a => Object.assign(a, { ciclos: (c || []).filter(x => x.assinante_id === a.id).map(x => Object.assign(x, { valor: Number(x.valor) })) }));
+    },
+    async usosPlano(bid, de) { return (await sb(`/rest/v1/agendamentos?barbearia_id=eq.${q(bid)}&assinante_id=not.is.null&data=gte.${de}&select=id,assinante_id,data,status`, { auth: true })) || []; },
+    async criarAssinante(bid, a) {
+      const alfa = "ABCDEFGHJKMNPQRSTUVWXYZ23456789", cod = () => Array.from(crypto.getRandomValues(new Uint8Array(6)), n => alfa[n % alfa.length]).join("");
+      for (let i = 0; i < 3; i++) {
+        try { const c = cod(); await sb("/rest/v1/assinantes", { method: "POST", auth: true, headers: { Prefer: "return=minimal" }, body: { id: a.id || crypto.randomUUID(), barbearia_id: bid, pacote_id: a.pacote_id, nome: a.nome, telefone: (a.telefone || "").replace(/\D/g, ""), codigo: c } }); return c; }
+        catch (e) { if (!/duplicate|codigo/i.test(e.message) || i === 2) throw e; }
+      }
+    },
+    async atualizarAssinante(bid, id, patch) { await sb(`/rest/v1/assinantes?id=eq.${q(id)}`, { method: "PATCH", auth: true, body: patch }); },
+    async removerAssinante(bid, id) { await sb(`/rest/v1/assinantes?id=eq.${q(id)}`, { method: "DELETE", auth: true }); },
+    async renovarAssinante(id, valor, lancar) { return await rpc("renovar_assinante", { p_id: id, p_valor: valor, p_lancar: lancar !== false }, true); },
+    async desfazerCiclo(bid, id) { await sb(`/rest/v1/assinatura_ciclos?id=eq.${q(id)}`, { method: "DELETE", auth: true }); },
+    async contasFixas(bid) { return ((await sb(`/rest/v1/contas_fixas?barbearia_id=eq.${q(bid)}&order=dia,descricao`, { auth: true })) || []).map(c => Object.assign(c, { valor: Number(c.valor) })); },
+    async salvarContaFixa(bid, c) {
+      const body = { descricao: c.descricao, categoria: c.categoria || "Outros", valor: c.valor, dia: c.dia, ativo: c.ativo !== false };
+      if (c.id) await sb(`/rest/v1/contas_fixas?id=eq.${q(c.id)}`, { method: "PATCH", auth: true, body });
+      else await sb("/rest/v1/contas_fixas", { method: "POST", auth: true, body: Object.assign({ barbearia_id: bid }, body), headers: { Prefer: "return=minimal" } });
+    },
+    async removerContaFixa(bid, id) { await sb(`/rest/v1/contas_fixas?id=eq.${q(id)}`, { method: "DELETE", auth: true }); },
+    async lancamentos(bid, de, ate) {
+      return ((await sb(`/rest/v1/lancamentos?barbearia_id=eq.${q(bid)}&data=gte.${de}&data=lte.${ate}&order=data,criado_em`, { auth: true })) || []).map(l => Object.assign(l, { valor: Number(l.valor) }));
+    },
+    async pagosDoMes(bid, ym) { return ((await sb(`/rest/v1/lancamentos?barbearia_id=eq.${q(bid)}&competencia=eq.${q(ym)}`, { auth: true })) || []).map(l => Object.assign(l, { valor: Number(l.valor) })); },
+    async salvarLancamento(bid, l) {
+      const body = { tipo: l.tipo, descricao: l.descricao, categoria: l.categoria || "Outros", valor: l.valor, data: l.data, pago: l.pago !== false, conta_fixa_id: l.conta_fixa_id || null, competencia: l.competencia || null };
+      if (l.id) await sb(`/rest/v1/lancamentos?id=eq.${q(l.id)}`, { method: "PATCH", auth: true, body });
+      else await sb("/rest/v1/lancamentos", { method: "POST", auth: true, body: Object.assign({ barbearia_id: bid }, body), headers: { Prefer: "return=minimal" } });
+    },
+    async removerLancamento(bid, id) { await sb(`/rest/v1/lancamentos?id=eq.${q(id)}`, { method: "DELETE", auth: true }); },
     async profs(bid) { return (await rpc("profissionais_da_barbearia", { p_bid: bid }, true)) || []; },
     async salvarProf(bid, p) {
       const body = { nome: p.nome, dias: p.dias, ativo: p.ativo, comissao: p.comissao || 0 };
