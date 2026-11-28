@@ -52,7 +52,7 @@
     mais: '<path d="M4 6h16M4 12h16M4 18h16"/>'
   };
   function moldura({ marca, marcaHref = "/", acoes = "", tabs = null, ativo = "", rodape = true, logo = null }) {
-    $("#topo").innerHTML = `<a class="marca" href="${esc(marcaHref)}" data-link>${logo ? `<img src="${esc(logo)}" alt="" width="30" height="30">` : `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#poste"/></svg>`}<span>${esc(marca)}</span></a>
+    $("#topo").innerHTML = `<a class="marca" href="${esc(marcaHref)}" data-link>${logo ? `<img src="${esc(logo)}" alt="" width="30" height="30">` : `<img src="icons/icon-192.png" alt="" width="30" height="30">`}<span>${esc(marca)}</span></a>
       <div class="topo-acoes"><button id="btnInstalar" class="btn-inst" ${promptInst ? "" : "hidden"}>Instalar app</button>${acoes}</div>`;
     $("#btnInstalar").onclick = instalar;
     const tb = $("#tabbar");

@@ -731,7 +731,7 @@
         <button class="btn btn-mini btn-sec" id="ajCapaSalvar" hidden>Salvar escurecimento</button>
         ${capa ? `<button class="btn btn-mini btn-sec" id="ajSemCapa">Remover capa</button>` : ""}</div>
       <h2 style="margin-top:28px">Ícone da barbearia</h2>
-      <div class="icone-atual"><div class="ic-grande">${ic ? `<img src="${esc(ic.i192)}" alt="Ícone atual" width="88" height="88">` : `<svg viewBox="0 0 24 24" aria-hidden="true"><use href="#poste"/></svg>`}</div>
+      <div class="icone-atual"><div class="ic-grande">${ic ? `<img src="${esc(ic.i192)}" alt="Ícone atual" width="88" height="88">` : `<img src="icons/icon-192.png" alt="Ícone padrão" width="88" height="88">`}</div>
         <div><p class="sub" style="margin:0 0 10px">${ic ? "Este é o ícone do app instalado pelos seus clientes." : "Sem ícone próprio: os clientes veem o poste de barbeiro."} Use o logo em PNG ou JPG, de preferência quadrado.</p>
         <div class="seg" style="margin:0"><button class="btn btn-mini" id="ajIcone">${ic ? "Trocar ícone" : "Enviar ícone"}</button>${ic ? `<button class="btn btn-mini btn-sec" id="ajSemIcone">Remover</button>` : ""}</div></div></div>
       <h2 style="margin-top:28px">Seu link</h2>
