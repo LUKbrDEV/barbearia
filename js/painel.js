@@ -725,7 +725,7 @@
     const capa = c.capa && c.capa.v ? S.fotoURL(ctx.bid, "capa.webp", c.capa.v) : null, esc0 = c.capa && c.capa.escurecer != null ? c.capa.escurecer : 55;
     box().innerHTML = `<h2>Capa da página</h2>
       <p class="sub" style="margin-top:0">Uma foto da sua barbearia no topo da página que o cliente abre. Fica atrás do nome, escurecida para o texto aparecer bem.</p>
-      <div class="capa-prev" id="capaPrev" style="${capa ? `background-image:url('${esc(capa)}');` : ""}--capa-op:${esc0 / 100}"><small id="capaAviso">${capa ? "Prévia" : "Sem capa: aparece o fundo padrão"}</small><b>${esc(ctx.b.nome)}</b></div>
+      <div class="capa-prev" id="capaPrev" style="${capa ? `background:#111 url('${esc(capa)}') center/cover no-repeat;` : ""}--capa-op:${esc0 / 100}"><small id="capaAviso">${capa ? "Prévia" : "Sem capa: aparece o fundo padrão"}</small><b>${esc(ctx.b.nome)}</b></div>
       <label class="capa-op">Escurecer<input type="range" id="capaOp" min="0" max="90" step="5" value="${esc0}" aria-label="Quanto escurecer a capa"><output id="capaOpV">${esc0}%</output></label>
       <div class="seg" style="margin:8px 0 0"><button class="btn btn-mini" id="ajCapa">${capa ? "Trocar foto" : "Enviar foto"}</button>
         <button class="btn btn-mini btn-sec" id="ajCapaSalvar" hidden>Salvar escurecimento</button>
